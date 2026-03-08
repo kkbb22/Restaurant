@@ -1,24 +1,24 @@
-# ===== ê©¥é¡ Ÿé ëŸ˜ ===== 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build 
-WORKDIR /app 
- 
-# ë«¦ êéå Ÿéê¬©íã íŸ«¢ãŸ§¡ Ÿé¥ªê 
-COPY *.csproj . 
-RUN dotnet restore 
- 
-# ë«¦  Ÿçï ŸéêéåŸ¢ í ëŸ˜ Ÿé¢á ïç 
-COPY . . 
-RUN dotnet publish -c Release -o out 
- 
-# ===== ê©¥é¡ Ÿé¢¬äïé ===== 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 
-WORKDIR /app 
- 
-# ë«¦ ŸéêéåŸ¢ Ÿéê ëï¡ 
-COPY --from=build /app/out . 
- 
-# ¢ã©ïå Ÿéêëå¨ 
-ENV ASPNETCORE_URLS=http://+:8080 
-EXPOSE 8080 
- 
-# ¢¬äïé Ÿé¢á ïç 
+# ===== ãÑÍáÉ ÇáÈäÇÁ =====
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /app
+
+# äÓÎ ãáİ ÇáãÔÑæÚ ãä ÇáãÌáÏ ÇáİÑÚí Restaurant
+COPY Restaurant/*.csproj ./Restaurant/
+WORKDIR /app/Restaurant
+RUN dotnet restore
+
+# äÓÎ ÈÇŞí ãáİÇÊ ÇáãÔÑæÚ
+COPY Restaurant/. .
+RUN dotnet publish -c Release -o /app/out
+
+# ===== ãÑÍáÉ ÇáÊÔÛíá =====
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+WORKDIR /app
+COPY --from=build /app/out .
+
+# ÊÚÑíİ ÇáãäİĞ
+ENV ASPNETCORE_URLS=http://+:8080
+EXPOSE 8080
+
+# ÊÔÛíá ÇáÊØÈíŞ (ÇáÇÓã ãä ãáİ csproj åæ Restaurant)
+ENTRYPOINT ["dotnet", "Restaurant.dll"]
