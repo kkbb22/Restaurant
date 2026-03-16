@@ -8,6 +8,9 @@ namespace Restaurant.Models
         [Key]
         public int OrderId { get; set; }
 
+        [Required]
+        public int RestaurantId { get; set; }
+
         public int? ReservationId { get; set; }
 
         [Required]

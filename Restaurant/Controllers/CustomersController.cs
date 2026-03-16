@@ -10,16 +10,18 @@ namespace Restaurant.Controllers
     public class CustomersController : ControllerBase
     {
         private readonly AppDbContext _context;
-
         public CustomersController(AppDbContext context)
         {
             _context = context;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Customer>>> GetCustomers()
+        public async Task<ActionResult<IEnumerable<Customer>>> GetCustomers([FromQuery] int restaurantId = 0)
         {
-            return await _context.Customers.ToListAsync();
+            var query = _context.Customers.AsQueryable();
+            if (restaurantId > 0)
+                query = query.Where(c => c.RestaurantId == restaurantId);
+            return await query.ToListAsync();
         }
 
         [HttpGet("{id}")]

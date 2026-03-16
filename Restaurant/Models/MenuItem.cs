@@ -8,6 +8,9 @@ namespace Restaurant.Models
         public int MenuItemId { get; set; }
 
         [Required]
+        public int RestaurantId { get; set; }
+
+        [Required]
         public string Name { get; set; } = string.Empty;
 
         public string? Description { get; set; }

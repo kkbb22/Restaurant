@@ -8,12 +8,14 @@ namespace Restaurant.Models
         public int CustomerId { get; set; }
 
         [Required]
+        public int RestaurantId { get; set; }
+
+        [Required]
         public string FullName { get; set; } = string.Empty;
 
         [Required]
         public string PhoneNumber { get; set; } = string.Empty;
 
-        [EmailAddress]
         public string? Email { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;

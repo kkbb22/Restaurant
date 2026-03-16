@@ -10,24 +10,80 @@ namespace Restaurant.Controllers
     public class OrdersController : ControllerBase
     {
         private readonly AppDbContext _context;
-
         public OrdersController(AppDbContext context)
         {
             _context = context;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
+        public async Task<ActionResult<IEnumerable<object>>> GetOrders([FromQuery] int restaurantId = 0)
         {
-            return await _context.Orders.ToListAsync();
+            var query = _context.Orders
+                .Include(o => o.Customer)
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.MenuItem)
+                .AsQueryable();
+
+            if (restaurantId > 0)
+                query = query.Where(o => o.RestaurantId == restaurantId);
+
+            var orders = await query.ToListAsync();
+
+            var result = orders.Select(o => new {
+                o.OrderId,
+                o.CustomerId,
+                o.RestaurantId,
+                o.OrderDate,
+                o.Status,
+                o.TotalAmount,
+                o.ReservationId,
+                CustomerName  = o.Customer != null ? o.Customer.FullName : "",
+                CustomerPhone = o.Customer != null ? o.Customer.PhoneNumber : "",
+                customer = o.Customer,
+                Items = o.OrderItems != null ? o.OrderItems.Select(i => new {
+                    i.OrderItemId,
+                    i.MenuItemId,
+                    i.Quantity,
+                    i.UnitPrice,
+                    MenuName = i.MenuItem != null ? i.MenuItem.Name : "صنف",
+                    menuItem = i.MenuItem
+                }) : null,
+                orderItems = o.OrderItems != null ? o.OrderItems.Select(i => new {
+                    i.OrderItemId,
+                    i.MenuItemId,
+                    i.Quantity,
+                    i.UnitPrice,
+                    MenuName = i.MenuItem != null ? i.MenuItem.Name : "صنف",
+                    menuItem = i.MenuItem
+                }) : null
+            });
+
+            return Ok(result);
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Order>> GetOrder(int id)
+        public async Task<ActionResult<object>> GetOrder(int id)
         {
-            var order = await _context.Orders.FindAsync(id);
-            if (order == null) return NotFound();
-            return order;
+            var o = await _context.Orders
+                .Include(o => o.Customer)
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.MenuItem)
+                .FirstOrDefaultAsync(o => o.OrderId == id);
+
+            if (o == null) return NotFound();
+
+            return Ok(new {
+                o.OrderId, o.CustomerId, o.RestaurantId,
+                o.OrderDate, o.Status, o.TotalAmount,
+                CustomerName  = o.Customer?.FullName ?? "",
+                CustomerPhone = o.Customer?.PhoneNumber ?? "",
+                customer = o.Customer,
+                orderItems = o.OrderItems?.Select(i => new {
+                    i.OrderItemId, i.MenuItemId, i.Quantity, i.UnitPrice,
+                    MenuName = i.MenuItem?.Name ?? "صنف",
+                    menuItem = i.MenuItem
+                })
+            });
         }
 
         [HttpPost]

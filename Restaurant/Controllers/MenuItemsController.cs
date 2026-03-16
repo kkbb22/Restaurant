@@ -10,16 +10,18 @@ namespace Restaurant.Controllers
     public class MenuItemsController : ControllerBase
     {
         private readonly AppDbContext _context;
-
         public MenuItemsController(AppDbContext context)
         {
             _context = context;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<MenuItem>>> GetMenuItems()
+        public async Task<ActionResult<IEnumerable<MenuItem>>> GetMenuItems([FromQuery] int restaurantId = 0)
         {
-            return await _context.MenuItems.ToListAsync();
+            var query = _context.MenuItems.AsQueryable();
+            if (restaurantId > 0)
+                query = query.Where(m => m.RestaurantId == restaurantId);
+            return await query.ToListAsync();
         }
 
         [HttpGet("{id}")]
@@ -46,6 +48,7 @@ namespace Restaurant.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteMenuItem(int id)
         {
