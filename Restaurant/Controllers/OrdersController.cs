@@ -20,7 +20,7 @@ namespace Restaurant.Controllers
         {
             var query = _context.Orders
                 .Include(o => o.Customer)
-                .Include(o => o.OrderItems)
+                .Include(o => o.OrderItems!) // علامة التعجب لحل الـ Warning
                     .ThenInclude(oi => oi.MenuItem)
                 .AsQueryable();
 
@@ -37,25 +37,17 @@ namespace Restaurant.Controllers
                 o.Status,
                 o.TotalAmount,
                 o.ReservationId,
-                CustomerName  = o.Customer != null ? o.Customer.FullName : "",
+                CustomerName  = o.Customer != null ? o.Customer.FullName : "زبون خارجي",
                 CustomerPhone = o.Customer != null ? o.Customer.PhoneNumber : "",
-                customer = o.Customer,
-                Items = o.OrderItems != null ? o.OrderItems.Select(i => new {
+                Items = o.OrderItems?.Select(i => new {
                     i.OrderItemId,
                     i.MenuItemId,
                     i.Quantity,
                     i.UnitPrice,
-                    MenuName = i.MenuItem != null ? i.MenuItem.Name : "صنف",
-                    menuItem = i.MenuItem
-                }) : null,
-                orderItems = o.OrderItems != null ? o.OrderItems.Select(i => new {
-                    i.OrderItemId,
-                    i.MenuItemId,
-                    i.Quantity,
-                    i.UnitPrice,
-                    MenuName = i.MenuItem != null ? i.MenuItem.Name : "صنف",
-                    menuItem = i.MenuItem
-                }) : null
+                    // هنا السحر: جلب اسم الأكلة
+                    MenuName = i.MenuItem != null ? i.MenuItem.Name : "صنف غير معروف",
+                    Price = i.UnitPrice
+                })
             });
 
             return Ok(result);
@@ -66,7 +58,7 @@ namespace Restaurant.Controllers
         {
             var o = await _context.Orders
                 .Include(o => o.Customer)
-                .Include(o => o.OrderItems)
+                .Include(o => o.OrderItems!)
                     .ThenInclude(oi => oi.MenuItem)
                 .FirstOrDefaultAsync(o => o.OrderId == id);
 
@@ -75,13 +67,10 @@ namespace Restaurant.Controllers
             return Ok(new {
                 o.OrderId, o.CustomerId, o.RestaurantId,
                 o.OrderDate, o.Status, o.TotalAmount,
-                CustomerName  = o.Customer?.FullName ?? "",
-                CustomerPhone = o.Customer?.PhoneNumber ?? "",
-                customer = o.Customer,
+                CustomerName  = o.Customer?.FullName ?? "زبون خارجي",
                 orderItems = o.OrderItems?.Select(i => new {
                     i.OrderItemId, i.MenuItemId, i.Quantity, i.UnitPrice,
-                    MenuName = i.MenuItem?.Name ?? "صنف",
-                    menuItem = i.MenuItem
+                    MenuName = i.MenuItem?.Name ?? "صنف"
                 })
             });
         }

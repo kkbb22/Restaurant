@@ -9,7 +9,9 @@ namespace Restaurant.Data
         {
         }
 
-        public DbSet<Restaurant.Models.Restaurant> Restaurants { get; set; }
+        // التعديل هنا: استخدام الاسم الجديد RestaurantProfile
+        public DbSet<RestaurantProfile> Restaurants { get; set; }
+        
         public DbSet<Customer> Customers { get; set; }
         public DbSet<RestaurantTable> RestaurantTables { get; set; }
         public DbSet<MenuItem> MenuItems { get; set; }

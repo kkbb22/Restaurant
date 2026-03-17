@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Restaurant.Data;
 using Restaurant.Models;
+using BCrypt.Net;
 
 namespace Restaurant.Controllers
 {
@@ -15,29 +16,21 @@ namespace Restaurant.Controllers
             _context = context;
         }
 
-        // ─── LOGIN للمطعم ───────────────────────────
         [HttpPost("login")]
         public async Task<ActionResult<object>> Login([FromBody] LoginRequest req)
         {
-            // Super Admin
             if (req.Username == "admin" && req.Password == "admin123")
             {
-                return Ok(new {
-                    success = true,
-                    role = "superadmin",
-                    restaurantId = 0,
-                    name = "Super Admin"
-                });
+                return Ok(new { success = true, role = "superadmin", restaurantId = 0, name = "Super Admin" });
             }
 
-            // مطعم عادي
             var restaurant = await _context.Restaurants
-                .FirstOrDefaultAsync(r => r.Username == req.Username
-                                       && r.Password == req.Password
-                                       && r.IsActive);
+                .FirstOrDefaultAsync(r => r.Username == req.Username && r.IsActive);
 
-            if (restaurant == null)
+            if (restaurant == null || !BCrypt.Net.BCrypt.Verify(req.Password, restaurant.Password))
+            {
                 return Unauthorized(new { success = false, message = "اسم المستخدم أو كلمة المرور غلط" });
+            }
 
             return Ok(new {
                 success = true,
@@ -55,78 +48,58 @@ namespace Restaurant.Controllers
             });
         }
 
-        // ─── إضافة مطعم جديد (Super Admin فقط) ─────
         [HttpPost("add-restaurant")]
         public async Task<ActionResult<object>> AddRestaurant([FromBody] AddRestaurantRequest req)
         {
             if (req.AdminPassword != "admin123")
                 return Unauthorized(new { message = "غير مصرح" });
 
-            // تحقق إن اليوزرنيم مش موجود
-            var exists = await _context.Restaurants
-                .AnyAsync(r => r.Username == req.Username);
+            var exists = await _context.Restaurants.AnyAsync(r => r.Username == req.Username);
+            if (exists) return BadRequest(new { message = "اسم المستخدم موجود مسبقاً" });
 
-            if (exists)
-                return BadRequest(new { message = "اسم المستخدم موجود مسبقاً" });
-
-            var restaurant = new Restaurant.Models.Restaurant
+            var restaurant = new RestaurantProfile 
             {
-                Name        = req.Name,
-                Username    = req.Username,
-                Password    = req.Password,
-                PrimaryColor   = req.PrimaryColor ?? "#E63946",
+                Name = req.Name,
+                Username = req.Username,
+                Password = BCrypt.Net.BCrypt.HashPassword(req.Password),
+                PrimaryColor = req.PrimaryColor ?? "#E63946",
                 SecondaryColor = req.SecondaryColor ?? "#FF6B35",
-                OpenTime    = req.OpenTime ?? "10:00",
-                CloseTime   = req.CloseTime ?? "23:00",
-                Phone       = req.Phone,
-                Address     = req.Address,
-                IsActive    = true,
-                AcceptOrders = true
+                OpenTime = req.OpenTime ?? "10:00",
+                CloseTime = req.CloseTime ?? "23:00",
+                Phone = req.Phone,
+                Address = req.Address,
+                IsActive = true,
+                AcceptOrders = true,
+                CreatedAt = DateTime.Now
             };
 
             _context.Restaurants.Add(restaurant);
             await _context.SaveChangesAsync();
-
-            return Ok(new {
-                success = true,
-                message = "تم إضافة المطعم بنجاح",
-                restaurantId = restaurant.RestaurantId
-            });
+            return Ok(new { success = true, message = "تم إضافة المطعم بنجاح", restaurantId = restaurant.RestaurantId });
         }
 
-        // ─── جلب كل المطاعم (Super Admin) ──────────
         [HttpGet("restaurants")]
         public async Task<ActionResult<object>> GetRestaurants([FromQuery] string adminPassword)
         {
-            if (adminPassword != "admin123")
-                return Unauthorized();
-
-            var restaurants = await _context.Restaurants
-                .Select(r => new {
-                    r.RestaurantId, r.Name, r.Username,
-                    r.IsActive, r.CreatedAt, r.Phone, r.Address
-                }).ToListAsync();
-
-            return Ok(restaurants);
+            if (adminPassword != "admin123") return Unauthorized();
+            return await _context.Restaurants.Select(r => new {
+                r.RestaurantId, r.Name, r.Username, r.IsActive, r.CreatedAt, r.Phone, r.Address
+            }).ToListAsync();
         }
 
-        // ─── تفعيل/تعطيل مطعم ───────────────────────
         [HttpPut("toggle/{id}")]
         public async Task<ActionResult> ToggleRestaurant(int id, [FromQuery] string adminPassword)
         {
-            if (adminPassword != "admin123")
-                return Unauthorized();
-
+            if (adminPassword != "admin123") return Unauthorized();
             var restaurant = await _context.Restaurants.FindAsync(id);
             if (restaurant == null) return NotFound();
-
             restaurant.IsActive = !restaurant.IsActive;
             await _context.SaveChangesAsync();
-
             return Ok(new { success = true, isActive = restaurant.IsActive });
         }
     }
 
+    // ─── هذه هي الـ Classes التي كانت ناقصة وتسببت بالخطأ ───
     public class LoginRequest
     {
         public string Username { get; set; } = string.Empty;
@@ -136,14 +109,14 @@ namespace Restaurant.Controllers
     public class AddRestaurantRequest
     {
         public string AdminPassword { get; set; } = string.Empty;
-        public string Name          { get; set; } = string.Empty;
-        public string Username      { get; set; } = string.Empty;
-        public string Password      { get; set; } = string.Empty;
-        public string? PrimaryColor   { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string? PrimaryColor { get; set; }
         public string? SecondaryColor { get; set; }
-        public string? OpenTime       { get; set; }
-        public string? CloseTime      { get; set; }
-        public string? Phone          { get; set; }
-        public string? Address        { get; set; }
+        public string? OpenTime { get; set; }
+        public string? CloseTime { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
     }
 }

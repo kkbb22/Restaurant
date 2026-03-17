@@ -2,16 +2,16 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Restaurant.Models
 {
-    public class Restaurant
+    public class RestaurantProfile 
     {
         [Key]
-        public int RestaurantId { get; set; }
+        public int RestaurantId { get; set; } // تأكدنا من الاسم هنا
 
         [Required]
         public string Name { get; set; } = string.Empty;
 
         [Required]
-        public string Username { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty; // أنت تستخدم يوزر نيم
 
         [Required]
         public string Password { get; set; } = string.Empty;
