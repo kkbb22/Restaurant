@@ -49,7 +49,7 @@ namespace Restaurant.Migrations
 
                     b.HasKey("CustomerId");
 
-                    b.ToTable("Customers");
+                    b.ToTable("Customers", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant.Models.MenuItem", b =>
@@ -82,7 +82,7 @@ namespace Restaurant.Migrations
 
                     b.HasKey("MenuItemId");
 
-                    b.ToTable("MenuItems");
+                    b.ToTable("MenuItems", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant.Models.Order", b =>
@@ -118,7 +118,7 @@ namespace Restaurant.Migrations
 
                     b.HasIndex("ReservationId");
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant.Models.OrderItem", b =>
@@ -147,7 +147,7 @@ namespace Restaurant.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("OrderItems");
+                    b.ToTable("OrderItems", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant.Models.Payment", b =>
@@ -180,7 +180,7 @@ namespace Restaurant.Migrations
 
                     b.HasKey("PaymentId");
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant.Models.Reservation", b =>
@@ -222,7 +222,7 @@ namespace Restaurant.Migrations
 
                     b.HasIndex("TableId");
 
-                    b.ToTable("Reservations");
+                    b.ToTable("Reservations", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant.Models.RestaurantProfile", b =>
@@ -281,7 +281,7 @@ namespace Restaurant.Migrations
 
                     b.HasKey("RestaurantId");
 
-                    b.ToTable("Restaurants");
+                    b.ToTable("Restaurants", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant.Models.RestaurantSettings", b =>
@@ -349,7 +349,7 @@ namespace Restaurant.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("RestaurantSettings");
+                    b.ToTable("RestaurantSettings", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant.Models.RestaurantTable", b =>
@@ -400,7 +400,7 @@ namespace Restaurant.Migrations
 
                     b.HasKey("ReviewId");
 
-                    b.ToTable("Reviews");
+                    b.ToTable("Reviews", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant.Models.Order", b =>
