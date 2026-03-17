@@ -1,5 +1,4 @@
-﻿
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Restaurant.Data;
 using Restaurant.Services;
 
@@ -18,15 +17,17 @@ builder.Services.AddScoped<ReservationService>();
 // ── قاعدة البيانات ──
 var dbUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-if (!string.IsNullOrEmpty(dbUrl) && dbUrl.StartsWith("postgresql://"))
+if (!string.IsNullOrEmpty(dbUrl))
 {
-    var uri     = new Uri(dbUrl);
+    // Railway PostgreSQL
+    var uri      = new Uri(dbUrl);
     var userInfo = uri.UserInfo.Split(':');
-    var pgConn  = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+    var pgConn   = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
     builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(pgConn));
 }
 else
 {
+    // Local SQL Server
     builder.Services.AddDbContext<AppDbContext>(opt =>
         opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 }
@@ -42,7 +43,6 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var app = builder.Build();
 
-// ── تطبيق الـ Migrations تلقائياً ──
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
