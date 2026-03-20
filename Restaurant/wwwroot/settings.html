@@ -355,10 +355,18 @@
 <script>
 const API = 'https://rohan-exceptive-antonio.ngrok-free.dev/api';
 
+// Helper: adds ngrok bypass header to every request
+function apiFetch(url, options = {}) {
+  options.headers = options.headers || {};
+  options.headers['ngrok-skip-browser-warning'] = 'true';
+  return fetch(url, options);
+}
+
+
 // ─── LOAD ────────────────────────────────────────────
 async function loadSettings() {
   try {
-    const res = await fetch(`${API}/RestaurantSettings`);
+    const res = await apiFetch(`${API}/RestaurantSettings`);
     const s = await res.json();
 
     document.getElementById('restaurantName').value = s.restaurantName || '';
@@ -401,8 +409,8 @@ async function saveSettings() {
     .map(c => c.dataset.day).join(',');
 
   const data = {
-    restaurantName: document.getElementById('restaurantName').value,
-    phone:          document.getElementById('phone').value,
+    restaurantUsername: document.getElementById('restaurantName').value,
+    Password:          document.getElementById('phone').value,
     address:        document.getElementById('address').value,
     whatsApp:       document.getElementById('whatsApp').value,
     logoUrl:        document.getElementById('logoUrl').value || null,
@@ -420,7 +428,7 @@ async function saveSettings() {
   };
 
   try {
-    const res = await fetch(`${API}/RestaurantSettings`, {
+    const res = await apiFetch(`${API}/RestaurantSettings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -444,7 +452,7 @@ async function saveSettings() {
 // ─── CHECK IS OPEN ────────────────────────────────────
 async function checkIsOpen() {
   try {
-    const res = await fetch(`${API}/RestaurantSettings/isopen`);
+    const res = await apiFetch(`${API}/RestaurantSettings/isopen`);
     const data = await res.json();
     const el = document.getElementById('current-status');
     const details = document.getElementById('status-details');
@@ -517,3 +525,28 @@ setInterval(checkIsOpen, 60000);
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

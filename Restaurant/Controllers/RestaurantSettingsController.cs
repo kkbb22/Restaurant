@@ -16,19 +16,36 @@ namespace Restaurant.Controllers
             _context = context;
         }
 
+        // GET: api/RestaurantSettings?restaurantId=1
         [HttpGet]
-        public async Task<ActionResult<RestaurantSettings>> GetSettings()
+        public async Task<ActionResult<RestaurantSettings>> GetSettings([FromQuery] int restaurantId = 0)
         {
-            var settings = await _context.RestaurantSettings.FirstOrDefaultAsync();
+            RestaurantSettings? settings;
+
+            if (restaurantId > 0)
+                settings = await _context.RestaurantSettings
+                    .FirstOrDefaultAsync(s => s.RestaurantId == restaurantId);
+            else
+                settings = await _context.RestaurantSettings.FirstOrDefaultAsync();
+
             if (settings == null)
-                settings = new RestaurantSettings { RestaurantName = "مطعمي" };
+                settings = new RestaurantSettings { RestaurantName = "مطعمي", RestaurantId = restaurantId };
+
             return settings;
         }
 
+        // PUT: api/RestaurantSettings
         [HttpPut]
         public async Task<ActionResult<RestaurantSettings>> UpdateSettings(RestaurantSettings updated)
         {
-            var settings = await _context.RestaurantSettings.FirstOrDefaultAsync();
+            RestaurantSettings? settings;
+
+            if (updated.RestaurantId > 0)
+                settings = await _context.RestaurantSettings
+                    .FirstOrDefaultAsync(s => s.RestaurantId == updated.RestaurantId);
+            else
+                settings = await _context.RestaurantSettings.FirstOrDefaultAsync();
+
             if (settings == null)
             {
                 updated.UpdatedAt = DateTime.Now;
@@ -53,14 +70,28 @@ namespace Restaurant.Controllers
                 settings.WhatsApp       = updated.WhatsApp;
                 settings.UpdatedAt      = DateTime.Now;
             }
+
             await _context.SaveChangesAsync();
-            return await _context.RestaurantSettings.FirstAsync();
+
+            if (updated.RestaurantId > 0)
+                return await _context.RestaurantSettings
+                    .FirstAsync(s => s.RestaurantId == updated.RestaurantId);
+            else
+                return await _context.RestaurantSettings.FirstAsync();
         }
 
+        // GET: api/RestaurantSettings/isopen?restaurantId=1
         [HttpGet("isopen")]
-        public async Task<ActionResult<object>> IsOpen()
+        public async Task<ActionResult<object>> IsOpen([FromQuery] int restaurantId = 0)
         {
-            var settings = await _context.RestaurantSettings.FirstOrDefaultAsync();
+            RestaurantSettings? settings;
+
+            if (restaurantId > 0)
+                settings = await _context.RestaurantSettings
+                    .FirstOrDefaultAsync(s => s.RestaurantId == restaurantId);
+            else
+                settings = await _context.RestaurantSettings.FirstOrDefaultAsync();
+
             if (settings == null)
                 return Ok(new { isOpen = true, message = "" });
 
@@ -68,11 +99,16 @@ namespace Restaurant.Controllers
                 return Ok(new { isOpen = false, message = settings.ClosedMessage });
 
             var now   = DateTime.Now.TimeOfDay;
-            var open  = TimeSpan.Parse(settings.OpenTime);
-            var close = TimeSpan.Parse(settings.CloseTime);
+            var open  = TimeSpan.Parse(settings.OpenTime ?? "10:00");
+            var close = TimeSpan.Parse(settings.CloseTime ?? "23:00");
             bool isOpen = now >= open && now <= close;
 
-            return Ok(new { isOpen, message = isOpen ? "" : settings.ClosedMessage, openTime = settings.OpenTime, closeTime = settings.CloseTime });
+            return Ok(new {
+                isOpen,
+                message   = isOpen ? "" : settings.ClosedMessage,
+                openTime  = settings.OpenTime,
+                closeTime = settings.CloseTime
+            });
         }
     }
 }

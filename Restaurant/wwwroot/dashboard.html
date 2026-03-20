@@ -265,16 +265,16 @@ body { background: #f0f2f5; min-height: 100vh; }
 <div id="login-screen">
   <div class="login-box">
     <div class="login-logo">
-      <h1>🍽️ مطعمي</h1>
-      <p>لوحة تحكم المطعم</p>
+      <h1 id="login-restaurant-name">🍽️ مطعمي</h1>
+      <p id="login-restaurant-sub">لوحة تحكم المطعم</p>
     </div>
     <div class="login-field">
       <label>اسم المستخدم</label>
-      <input type="text" id="l-user" placeholder="username" onkeydown="if(event.key==='Enter')doLogin()">
+      <input type="text" id="l-user" placeholder="اسم المستخدم" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <div class="login-field">
       <label>كلمة المرور</label>
-      <input type="password" id="l-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+      <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <button id="do-login-btn" onclick="doLogin()">دخول ←</button>
     <div class="login-error" id="login-error">❗ اسم المستخدم أو كلمة المرور غلط</div>
@@ -677,461 +677,678 @@ body { background: #f0f2f5; min-height: 100vh; }
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const API = 'http://localhost:5122/api';
+// ════════════════════════════════════════════════════
+//  CONFIG
+// ════════════════════════════════════════════════════
+const API = 'https://rohan-exceptive-antonio.ngrok-free.dev/api';
+
+function apiFetch(url, options = {}) {
+  options.headers = options.headers || {};
+  options.headers['ngrok-skip-browser-warning'] = 'true';
+  if (options.body && !options.headers['Content-Type']) {
+    options.headers['Content-Type'] = 'application/json';
+  }
+  return fetch(url, options);
+}
+
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+let currentRestaurantId   = 0;
+let currentRestaurantName = '';
+let currentUsername       = '';
 let allOrders = [], allMenuItems = [], allCustomers = [], allTables = [], allReservations = [];
 let ordersFilter = 'all';
 let prevNewOrders = 0;
 
-const PAGE_TITLES = {
-  overview: '<i class="fas fa-chart-pie ms-2"></i> نظرة عامة',
-  orders: '<i class="fas fa-receipt ms-2"></i> إدارة الطلبات',
-  menu: '<i class="fas fa-utensils ms-2"></i> قائمة الطعام',
-  customers: '<i class="fas fa-users ms-2"></i> العملاء',
-  reservations: '<i class="fas fa-calendar-alt ms-2"></i> الحجوزات',
-  tables: '<i class="fas fa-chair ms-2"></i> الطاولات',
-  settings: '<i class="fas fa-cog ms-2"></i> الإعدادات',
+const STATUS_AR = {
+  Placed:'🔴 جديد', Pending:'🟠 معلق',
+  Preparing:'🟡 تحضير', Ready:'🟢 جاهز',
+  Delivered:'🔵 مكتمل', Cancelled:'⚫ ملغي'
 };
 
-// ─── NAVIGATION ──────────────────────────────────────
-function showPage(name) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n => {
-    if (n.getAttribute('onclick')?.includes(name)) n.classList.add('active');
-  });
-  document.getElementById('page-title').innerHTML = PAGE_TITLES[name] || name;
-
-  if (name === 'settings') loadSettingsPage();
-}
-
-// ─── LOAD ALL ─────────────────────────────────────────
-async function refreshAll() {
-  showLoading();
-  await Promise.all([
-    loadOrders(), loadMenuItems(), loadCustomers(),
-    loadTables(), loadReservations(), loadRestaurantStatus()
-  ]);
-  hideLoading();
-  document.getElementById('last-update').textContent =
-    'آخر تحديث: ' + new Date().toLocaleTimeString('ar');
-}
-
-// ─── ORDERS ──────────────────────────────────────────
-async function loadOrders() {
+// ════════════════════════════════════════════════════
+//  SOUND
+// ════════════════════════════════════════════════════
+function playNewOrder() {
   try {
-    const [ordRes, custRes] = await Promise.all([
-      fetch(`${API}/Orders?restaurantId=${currentRestaurantId}`), fetch(`${API}/Customers?restaurantId=${currentRestaurantId}`)
-    ]);
-    allOrders    = await ordRes.json();
-    allCustomers = await custRes.json();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [{f:880,t:0,d:.12},{f:988,t:.14,d:.12},{f:1047,t:.28,d:.12},{f:880,t:.44,d:.12},{f:1175,t:.58,d:.35}]
+    .forEach(n => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'square'; o.frequency.value = n.f;
+      g.gain.setValueAtTime(0, ctx.currentTime+n.t);
+      g.gain.linearRampToValueAtTime(0.2, ctx.currentTime+n.t+.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+n.t+n.d);
+      o.start(ctx.currentTime+n.t); o.stop(ctx.currentTime+n.t+n.d+.05);
+    });
+  } catch(e) {}
+}
 
-    const custMap = Object.fromEntries(allCustomers.map(c => [c.customerId, c]));
-
-    allOrders = allOrders.map(o => ({
-      ...o,
-      customerName:  o.customer?.fullName   || custMap[o.customerId]?.fullName   || 'غير معروف',
-      customerPhone: o.customer?.phoneNumber || custMap[o.customerId]?.phoneNumber || '',
-      items: (o.orderItems || o.items || []).map(i => ({
-        ...i,
-        menuName:  i.menuItem?.name || i.menuName || 'صنف',
-        quantity:  i.quantity,
-        unitPrice: i.unitPrice
-      }))
+// ════════════════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════════════════
+(function restoreSession() {
+  const saved = sessionStorage.getItem('rms_session');
+  if (saved) {
+    try {
+      const s = JSON.parse(saved);
+      if (s.restaurantId > 0) {
+        currentRestaurantId = s.restaurantId;
+        currentRestaurantName = s.name || '';
+        currentUsername = s.username || '';
+        window.addEventListener('load', showDashboard);
+        return;
+      }
+    } catch(e) {}
+  }
+  const p = new URLSearchParams(window.location.search.replace(/#.*$/,''));
+  const rid = p.get('RestaurantId') || p.get('restaurantId');
+  const rname = decodeURIComponent(p.get('name') || '');
+  if (rid && parseInt(rid) > 0) {
+    currentRestaurantId = parseInt(rid);
+    currentRestaurantName = rname || 'مطعم';
+    sessionStorage.setItem('rms_session', JSON.stringify({
+      restaurantId: currentRestaurantId, name: currentRestaurantName, username: ''
     }));
+    window.addEventListener('load', showDashboard);
+  } else if (rname) {
+    // Has name in URL but no valid ID yet — still show it on login screen
+    currentRestaurantName = rname;
+  }
+  // Update login screen with restaurant name from URL (runs immediately)
+  window.addEventListener('DOMContentLoaded', function() {
+    updateLoginScreen();
+  });
+})();
 
-    const newCount = allOrders.filter(o => o.status === 'Placed').length;
-    if (prevNewOrders > 0 && newCount > prevNewOrders) playBeep();
-    prevNewOrders = newCount;
-
-    const badge = document.getElementById('nav-orders-badge');
-    badge.textContent = newCount;
-    badge.style.display = newCount > 0 ? 'inline' : 'none';
-
-    updateOrderStats();
-    renderOrders();
-    renderOverviewOrders();
-  } catch(e) { console.error(e); }
+function updateLoginScreen() {
+  const p = new URLSearchParams(window.location.search.replace(/#.*$/,''));
+  const rname = decodeURIComponent(p.get('name') || '');
+  const rid   = p.get('RestaurantId') || p.get('restaurantId');
+  
+  const nameEl = document.getElementById('login-restaurant-name');
+  const subEl  = document.getElementById('login-restaurant-sub');
+  
+  if (rname && nameEl) {
+    nameEl.textContent = '🍽️ ' + rname;
+    if (subEl) subEl.textContent = 'تسجيل الدخول للوحة التحكم';
+    document.title = rname + ' — تسجيل الدخول';
+  } else if (!rid && nameEl) {
+    // No restaurant specified — generic login
+    nameEl.textContent = '🍽️ RestaurantOS';
+    if (subEl) subEl.textContent = 'لوحة تحكم المطعم';
+  }
 }
-
-function updateOrderStats() {
-  const today = new Date().toISOString().split('T')[0];
-  const placed    = allOrders.filter(o => o.status === 'Placed').length;
-  const preparing = allOrders.filter(o => o.status === 'Preparing').length;
-  const ready     = allOrders.filter(o => o.status === 'Ready').length;
-  const delivered = allOrders.filter(o => o.status === 'Delivered' && o.orderDate?.startsWith(today)).length;
-
-  document.getElementById('stat-new-orders').textContent  = placed;
-  document.getElementById('stat-preparing').textContent   = preparing;
-  document.getElementById('stat-delivered').textContent   = delivered;
-  document.getElementById('o-stat-placed').textContent    = placed;
-  document.getElementById('o-stat-preparing').textContent = preparing;
-  document.getElementById('o-stat-ready').textContent     = ready;
-  document.getElementById('o-stat-delivered').textContent = delivered;
-}
-
-const STATUS_AR = { Placed:'🔴 جديد', Preparing:'🟡 تحضير', Ready:'🟢 جاهز', Delivered:'🔵 مكتمل', Cancelled:'⚫ ملغي' };
-
-function renderOrders() {
-  const filtered = ordersFilter === 'all' ? allOrders : allOrders.filter(o => o.status === ordersFilter);
-  const statusOrder = { Placed:0, Preparing:1, Ready:2, Delivered:3, Cancelled:4 };
-  filtered.sort((a,b) => (statusOrder[a.status]??9) - (statusOrder[b.status]??9));
-
-  const tbody = document.getElementById('orders-tbody');
-  if (!filtered.length) { tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-inbox"></i>لا توجد طلبات</div></td></tr>`; return; }
-
-  tbody.innerHTML = filtered.map(o => `
-    <tr>
-      <td><strong>#${o.orderId}</strong></td>
-      <td><div style="font-weight:700">${o.customerName}</div><small style="color:#aaa">${o.customerPhone}</small></td>
-      <td><div style="font-size:.82rem;line-height:2">${o.items?.map(i=>`<span style="display:block;background:#f0f7ff;border-radius:6px;padding:2px 8px;margin-bottom:2px"><b>${i.menuName||i.name||'صنف'}</b> × ${i.quantity} <span style="color:#27ae60;font-weight:700">(${(i.unitPrice*i.quantity).toFixed(2)} د)</span></span>`).join('')||'--'}</div></td>
-      <td><strong style="color:#27ae60">${parseFloat(o.totalAmount||0).toFixed(2)} د</strong></td>
-      <td style="font-size:.85rem">${o.orderDate ? new Date(o.orderDate).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : '--'}</td>
-      <td><span class="badge-status badge-${o.status}">${STATUS_AR[o.status]||o.status}</span></td>
-      <td>${getOrderBtns(o)}</td>
-    </tr>`).join('');
-}
-
-function renderOverviewOrders() {
-  const recent = [...allOrders].sort((a,b) => new Date(b.orderDate)-new Date(a.orderDate)).slice(0, 5);
-  const tbody = document.getElementById('overview-orders');
-  if (!recent.length) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="fas fa-inbox"></i>لا توجد طلبات</div></td></tr>`; return; }
-  tbody.innerHTML = recent.map(o => `
-    <tr>
-      <td><strong>#${o.orderId}</strong></td>
-      <td>${o.customerName}</td>
-      <td><strong style="color:#27ae60">${parseFloat(o.totalAmount||0).toFixed(2)} د</strong></td>
-      <td style="font-size:.85rem">${o.orderDate ? new Date(o.orderDate).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : '--'}</td>
-      <td><span class="badge-status badge-${o.status}">${STATUS_AR[o.status]||o.status}</span></td>
-      <td>${getOrderBtns(o)}</td>
-    </tr>`).join('');
-}
-
-function getOrderBtns(o) {
-  let b = '';
-  if (o.status==='Placed')     b += `<button class="btn-action btn-prepare" onclick="updateOrder(${o.orderId},'Preparing')">🔥 تحضير</button>`;
-  if (o.status==='Preparing')  b += `<button class="btn-action btn-ready"   onclick="updateOrder(${o.orderId},'Ready')">✅ جاهز</button>`;
-  if (o.status==='Ready')      b += `<button class="btn-action btn-deliver" onclick="updateOrder(${o.orderId},'Delivered')">🚀 تسليم</button>`;
-  if (['Placed','Preparing'].includes(o.status))
-    b += `<button class="btn-action btn-delete" onclick="updateOrder(${o.orderId},'Cancelled')">✕</button>`;
-  return b;
-}
-
-async function updateOrder(id, status) {
-  const o = allOrders.find(x => x.orderId === id);
-  if (!o) return;
-  const body = { ...o, status };
-  delete body.customerName; delete body.customerPhone; delete body.items;
-  try {
-    const res = await fetch(`${API}/Orders/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-    if (res.ok) { o.status = status; updateOrderStats(); renderOrders(); renderOverviewOrders(); showToast('✅ تم تحديث الحالة', 'success'); }
-  } catch(e) { showToast('❗ فشل التحديث', 'error'); }
-}
-
-function filterOrders(f, btn) {
-  ordersFilter = f;
-  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderOrders();
-}
-
-// ─── MENU ─────────────────────────────────────────────
-async function loadMenuItems() {
-  try {
-    const res = await fetch(`${API}/MenuItems?restaurantId=${currentRestaurantId}`);
-    allMenuItems = await res.json();
-    renderMenu();
-  } catch(e) {}
-}
-function renderMenu() {
-  const tbody = document.getElementById('menu-tbody');
-  if (!allMenuItems.length) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="fas fa-utensils"></i>لا توجد أصناف</div></td></tr>`; return; }
-  tbody.innerHTML = allMenuItems.map(item => `
-    <tr>
-      <td><strong>${item.name}</strong></td>
-      <td style="color:#7f8c8d;font-size:.85rem">${item.description||'--'}</td>
-      <td><strong style="color:#27ae60">${parseFloat(item.price).toFixed(2)} د</strong></td>
-      <td><span style="background:#eaf4fb;color:#3498db;padding:4px 10px;border-radius:50px;font-size:.8rem;font-weight:700">${item.category}</span></td>
-      <td>${item.isAvailable ? '✅' : '❌'}</td>
-      <td><button class="btn-action btn-delete" onclick="deleteMenuItem(${item.menuItemId})"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('');
-}
-function showMenuModal() { new bootstrap.Modal(document.getElementById('menuModal')).show(); }
-async function addMenuItem() {
-  const name = document.getElementById('m-name').value.trim();
-  const price = document.getElementById('m-price').value;
-  if (!name || !price) { showToast('❗ الاسم والسعر مطلوبان', 'error'); return; }
-  try {
-    const res = await fetch(`${API}/MenuItems`, { method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ name, description:document.getElementById('m-desc').value, price:parseFloat(price), category:document.getElementById('m-category').value, isAvailable:true }) });
-    if (res.ok) {
-      bootstrap.Modal.getInstance(document.getElementById('menuModal')).hide();
-      document.getElementById('m-name').value = document.getElementById('m-desc').value = document.getElementById('m-price').value = '';
-      await loadMenuItems();
-      showToast('✅ تم إضافة الصنف', 'success');
-    }
-  } catch(e) { showToast('❗ فشلت الإضافة', 'error'); }
-}
-async function deleteMenuItem(id) {
-  if (!confirm('هل أنت متأكد من حذف هذا الصنف؟')) return;
-  try {
-    await fetch(`${API}/MenuItems/${id}`, { method:'DELETE' });
-    await loadMenuItems();
-    showToast('✅ تم الحذف', 'success');
-  } catch(e) {}
-}
-
-// ─── CUSTOMERS ────────────────────────────────────────
-async function loadCustomers() {
-  try {
-    const res = await fetch(`${API}/Customers?restaurantId=${currentRestaurantId}`);
-    allCustomers = await res.json();
-    renderCustomers();
-    document.getElementById('stat-customers').textContent = allCustomers.length;
-  } catch(e) {}
-}
-function renderCustomers() {
-  const tbody = document.getElementById('customers-tbody');
-  if (!allCustomers.length) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="fas fa-users"></i>لا يوجد عملاء</div></td></tr>`; return; }
-  tbody.innerHTML = allCustomers.map(c => `
-    <tr>
-      <td>${c.customerId}</td>
-      <td><strong>${c.fullName}</strong></td>
-      <td>${c.phoneNumber}</td>
-      <td style="color:#7f8c8d">${c.email||'--'}</td>
-      <td style="font-size:.85rem">${new Date(c.createdAt).toLocaleDateString('ar')}</td>
-      <td><button class="btn-action btn-delete" onclick="deleteCustomer(${c.customerId})"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('');
-}
-function showCustomerModal() { new bootstrap.Modal(document.getElementById('customerModal')).show(); }
-async function addCustomer() {
-  const name = document.getElementById('c-name').value.trim();
-  const phone = document.getElementById('c-phone').value.trim();
-  if (!name || !phone) { showToast('❗ الاسم والهاتف مطلوبان', 'error'); return; }
-  try {
-    const res = await fetch(`${API}/Customers`, { method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ fullName:name, phoneNumber:phone, email:document.getElementById('c-email').value||null }) });
-    if (res.ok) {
-      bootstrap.Modal.getInstance(document.getElementById('customerModal')).hide();
-      await loadCustomers(); showToast('✅ تم إضافة العميل', 'success');
-    }
-  } catch(e) {}
-}
-async function deleteCustomer(id) {
-  if (!confirm('هل أنت متأكد من حذف هذا العميل؟')) return;
-  try { await fetch(`${API}/Customers/${id}`, { method:'DELETE' }); await loadCustomers(); showToast('✅ تم الحذف', 'success'); } catch(e) {}
-}
-
-// ─── TABLES ───────────────────────────────────────────
-async function loadTables() {
-  try {
-    const res = await fetch(`${API}/RestaurantTables`);
-    allTables = await res.json();
-    renderTables();
-  } catch(e) {}
-}
-function renderTables() {
-  const tbody = document.getElementById('tables-tbody');
-  if (!allTables.length) { tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="fas fa-chair"></i>لا توجد طاولات</div></td></tr>`; return; }
-  tbody.innerHTML = allTables.map(t => `
-    <tr>
-      <td><strong>طاولة ${t.tableNumber}</strong></td>
-      <td>${t.capacity} أشخاص</td>
-      <td><span class="badge-status ${t.isAvailable?'badge-Ready':'badge-Preparing'}">${t.isAvailable?'✅ متوفرة':'🔴 محجوزة'}</span></td>
-      <td><button class="btn-action btn-delete" onclick="deleteTable(${t.tableId})"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('');
-}
-function showTableModal() { new bootstrap.Modal(document.getElementById('tableModal')).show(); }
-async function addTable() {
-  const num = document.getElementById('t-number').value;
-  const cap = document.getElementById('t-capacity').value;
-  if (!num || !cap) { showToast('❗ الرقم والسعة مطلوبان', 'error'); return; }
-  try {
-    const res = await fetch(`${API}/RestaurantTables`, { method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ tableNumber:parseInt(num), capacity:parseInt(cap), isAvailable:true }) });
-    if (res.ok) { bootstrap.Modal.getInstance(document.getElementById('tableModal')).hide(); await loadTables(); showToast('✅ تم إضافة الطاولة', 'success'); }
-  } catch(e) {}
-}
-async function deleteTable(id) {
-  if (!confirm('هل أنت متأكد؟')) return;
-  try { await fetch(`${API}/RestaurantTables/${id}`, { method:'DELETE' }); await loadTables(); } catch(e) {}
-}
-
-// ─── RESERVATIONS ─────────────────────────────────────
-async function loadReservations() {
-  try {
-    const res = await fetch(`${API}/Reservations`);
-    allReservations = await res.json();
-    renderReservations();
-  } catch(e) {}
-}
-function renderReservations() {
-  const custMap  = Object.fromEntries(allCustomers.map(c => [c.customerId, c]));
-  const tableMap = Object.fromEntries(allTables.map(t => [t.tableId, t]));
-  const tbody = document.getElementById('reservations-tbody');
-  if (!allReservations.length) { tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-calendar"></i>لا توجد حجوزات</div></td></tr>`; return; }
-  tbody.innerHTML = allReservations.map(r => `
-    <tr>
-      <td><strong>${custMap[r.customerId]?.fullName||'غير معروف'}</strong></td>
-      <td>طاولة ${tableMap[r.tableId]?.tableNumber||r.tableId}</td>
-      <td>${new Date(r.reservationDate).toLocaleDateString('ar')}</td>
-      <td>${r.reservationTime}</td>
-      <td>${r.numberOfGuests} أشخاص</td>
-      <td><span class="badge-status badge-${r.status}">${r.status==='Confirmed'?'✅ مؤكد':r.status==='Cancelled'?'❌ ملغي':'⏳ معلق'}</span></td>
-      <td><button class="btn-action btn-delete" onclick="deleteReservation(${r.reservationId})"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('');
-}
-async function deleteReservation(id) {
-  if (!confirm('هل أنت متأكد من إلغاء الحجز؟')) return;
-  try { await fetch(`${API}/Reservations/${id}`, { method:'DELETE' }); await loadReservations(); showToast('✅ تم الإلغاء', 'success'); } catch(e) {}
-}
-
-// ─── SETTINGS ─────────────────────────────────────────
-async function loadRestaurantStatus() {
-  try {
-    const res = await fetch(`${API}/RestaurantSettings`);
-    const s = await res.json();
-    document.getElementById('sidebar-restaurant-name').textContent = s.restaurantName || 'مطعمي';
-    checkStatus();
-  } catch(e) {}
-}
-async function checkStatus() {
-  try {
-    const res = await fetch(`${API}/RestaurantSettings/isopen`);
-    const data = await res.json();
-    const dot  = document.getElementById('status-dot');
-    const txt  = document.getElementById('sidebar-status-text');
-    dot.className = 'status-dot ' + (data.isOpen ? 'dot-open' : 'dot-closed');
-    txt.textContent = data.isOpen ? 'مفتوح الآن' : 'مغلق الآن';
-    txt.style.color = data.isOpen ? '#27ae60' : '#e74c3c';
-  } catch(e) {}
-}
-async function loadSettingsPage() {
-  try {
-    const res = await fetch(`${API}/RestaurantSettings`);
-    const s = await res.json();
-    document.getElementById('s-name').value    = s.restaurantName || '';
-    document.getElementById('s-phone').value   = s.phone || '';
-    document.getElementById('s-address').value = s.address || '';
-    document.getElementById('s-color1').value  = s.primaryColor || '#E63946';
-    document.getElementById('s-color1-text').value = s.primaryColor || '#E63946';
-    document.getElementById('s-color2').value  = s.secondaryColor || '#FF6B35';
-    document.getElementById('s-color2-text').value = s.secondaryColor || '#FF6B35';
-    document.getElementById('s-open').value    = s.openTime || '10:00';
-    document.getElementById('s-close').value   = s.closeTime || '23:00';
-    document.getElementById('s-accept').checked = s.acceptOrders;
-    document.getElementById('s-closed-msg').value = s.closedMessage || '';
-
-    const res2 = await fetch(`${API}/RestaurantSettings/isopen`);
-    const data = await res2.json();
-    const badge = document.getElementById('s-status-badge');
-    const detail = document.getElementById('s-status-detail');
-    if (data.isOpen) {
-      badge.className = 'badge-status badge-Ready mb-2 d-inline-block';
-      badge.textContent = '✅ المطعم مفتوح الآن';
-    } else {
-      badge.className = 'badge-status badge-Cancelled mb-2 d-inline-block';
-      badge.textContent = '❌ المطعم مغلق الآن';
-    }
-    detail.textContent = `أوقات العمل: ${s.openTime} - ${s.closeTime}`;
-  } catch(e) {}
-
-  document.getElementById('s-color1').addEventListener('input', e => document.getElementById('s-color1-text').value = e.target.value);
-  document.getElementById('s-color2').addEventListener('input', e => document.getElementById('s-color2-text').value = e.target.value);
-}
-async function saveSettings() {
-  const data = {
-    restaurantName: document.getElementById('s-name').value,
-    phone:          document.getElementById('s-phone').value,
-    address:        document.getElementById('s-address').value,
-    primaryColor:   document.getElementById('s-color1-text').value,
-    secondaryColor: document.getElementById('s-color2-text').value,
-    openTime:       document.getElementById('s-open').value,
-    closeTime:      document.getElementById('s-close').value,
-    acceptOrders:   document.getElementById('s-accept').checked,
-    closedMessage:  document.getElementById('s-closed-msg').value,
-    updatedAt:      new Date().toISOString(),
-    workingDays:    'السبت,الأحد,الاثنين,الثلاثاء,الأربعاء,الخميس',
-    payCash: true, payCard: false, payOnline: false,
-  };
-  try {
-    const res = await fetch(`${API}/RestaurantSettings`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
-    if (res.ok) {
-      showToast('✅ تم حفظ الإعدادات', 'success');
-      document.getElementById('sidebar-restaurant-name').textContent = data.restaurantName;
-      checkStatus();
-    }
-  } catch(e) { showToast('❗ فشل الحفظ', 'error'); }
-}
-
-// ─── HELPERS ──────────────────────────────────────────
-function showLoading() { document.getElementById('loadingOverlay').classList.add('show'); }
-function hideLoading()  { document.getElementById('loadingOverlay').classList.remove('show'); }
-
-let toastT;
-function showToast(msg, type='') {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.className = 'show ' + type;
-  clearTimeout(toastT);
-  toastT = setTimeout(() => el.className = '', 3000);
-}
-
-function playBeep() {
-  try {
-    const ctx = new AudioContext();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.value = 880;
-    g.gain.setValueAtTime(0.3, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    o.start(); o.stop(ctx.currentTime + 0.5);
-  } catch(e) {}
-}
-
-// ─── INIT ─────────────────────────────────────────────
-
-// ─── LOGIN ────────────────────────────────────────────
-let currentRestaurantId = 0;
-let currentRestaurantName = 'مطعمي';
 
 async function doLogin() {
   const user = document.getElementById('l-user').value.trim();
   const pass = document.getElementById('l-pass').value.trim();
-  if (!user || !pass) return;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (!user || !pass) { errEl.style.display='block'; errEl.textContent='❗ أدخل البيانات'; return; }
   const btn = document.getElementById('do-login-btn');
-  btn.textContent = '⏳ جارٍ الدخول...';
+  btn.textContent = '⏳ جارٍ الدخول...'; btn.disabled = true;
   try {
-    const res  = await fetch(`${API}/Auth/login`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ username: user, password: pass })
+    const res  = await apiFetch(`${API}/Auth/login`, {
+      method:'POST', body: JSON.stringify({ Username: user, Password: pass })
     });
     const data = await res.json();
-    if (data.success && data.role === 'restaurant') {
-      currentRestaurantId   = data.restaurantId;
-      currentRestaurantName = data.name;
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('main-dashboard').style.display = 'block';
-      document.getElementById('sidebar-restaurant-name').textContent = data.name;
-      document.querySelector('.sidebar-brand h2').innerHTML = '<i class="fas fa-utensils ms-2"></i> ' + data.name;
-      document.title = 'لوحة تحكم - ' + data.name;
-      refreshAll();
+    if (data.success) {
+      // ❌ منع دخول السوبر أدمن من هنا — هذه لوحة المطعم فقط
+      if (data.role === 'superadmin') {
+        errEl.style.display = 'block';
+        errEl.textContent = '❗ هذه اللوحة للمطعم فقط — استخدم لوحة SuperAdmin';
+        btn.textContent = 'دخول ←'; btn.disabled = false;
+        return;
+      }
+      if (data.role !== 'restaurant') {
+        errEl.style.display = 'block';
+        errEl.textContent = '❗ ليس لديك صلاحية الدخول لهذه اللوحة';
+        btn.textContent = 'دخول ←'; btn.disabled = false;
+        return;
+      }
+      currentRestaurantId   = data.restaurantId || data.RestaurantId || currentRestaurantId || 1;
+      currentRestaurantName = data.name || data.restaurantName || 'مطعمي';
+      currentUsername = user;
+      sessionStorage.setItem('rms_session', JSON.stringify({
+        restaurantId: currentRestaurantId, name: currentRestaurantName, username: currentUsername
+      }));
+      showDashboard();
     } else {
-      document.getElementById('login-error').style.display = 'block';
+      errEl.style.display='block'; errEl.textContent='❗ اسم المستخدم أو كلمة المرور غلط';
     }
   } catch(e) {
-    document.getElementById('login-error').textContent = '❗ فشل الاتصال بالسيرفر';
-    document.getElementById('login-error').style.display = 'block';
+    errEl.style.display='block'; errEl.textContent='❗ فشل الاتصال بالسيرفر';
   }
-  btn.textContent = 'دخول ←';
+  btn.textContent='دخول ←'; btn.disabled=false;
 }
 
+function showDashboard() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-dashboard').style.display = 'block';
+  document.getElementById('sidebar-restaurant-name').textContent = currentRestaurantName;
+  document.getElementById('sidebar-brand-name').innerHTML =
+    `<i class="fas fa-utensils ms-2"></i> ${currentRestaurantName||'مطعمي'}`;
+  document.title = 'لوحة تحكم — ' + currentRestaurantName;
+  refreshAll();
+}
 
-// Auto-start disabled until login
-// refreshAll();
-setInterval(loadOrders, 30000);
-setInterval(checkStatus, 60000);
+function doLogout() {
+  sessionStorage.removeItem('rms_session');
+  currentRestaurantId = 0; currentUsername = '';
+  document.getElementById('main-dashboard').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('l-user').value = '';
+  document.getElementById('l-pass').value = '';
+  document.getElementById('login-error').style.display = 'none';
+}
+
+function openCustomerView() {
+  window.open(`index.html?restaurantId=${currentRestaurantId}`, '_blank');
+}
+
+// ════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════
+const PAGE_TITLES = {
+  overview:'<i class="fas fa-chart-pie ms-2"></i> نظرة عامة',
+  orders:'<i class="fas fa-receipt ms-2"></i> إدارة الطلبات',
+  menu:'<i class="fas fa-utensils ms-2"></i> القائمة',
+  customers:'<i class="fas fa-users ms-2"></i> العملاء',
+  tables:'<i class="fas fa-th ms-2"></i> الطاولات',
+  reservations:'<i class="fas fa-calendar-check ms-2"></i> الحجوزات',
+  settings:'<i class="fas fa-cog ms-2"></i> الإعدادات',
+};
+
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const page=document.getElementById('page-'+name);
+  if(page) page.classList.add('active');
+  if(el) el.classList.add('active');
+  else document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.getAttribute('onclick')?.includes(`'${name}'`)) n.classList.add('active');
+  });
+  document.getElementById('page-title').innerHTML = PAGE_TITLES[name]||name;
+  if(name==='settings')     loadRestaurantSettings();
+  if(name==='menu')         loadMenuItems();
+  if(name==='customers')    loadCustomers();
+  if(name==='tables')       loadTables();
+  if(name==='reservations') loadReservations();
+}
+
+// ════════════════════════════════════════════════════
+//  REFRESH
+// ════════════════════════════════════════════════════
+async function refreshAll() {
+  if (!currentRestaurantId) return;
+  await Promise.allSettled([loadOrders(), loadCustomers(), checkStatus()]);
+  document.getElementById('last-update-time').textContent =
+    new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ════════════════════════════════════════════════════
+//  ORDERS
+// ════════════════════════════════════════════════════
+async function loadOrders() {
+  try {
+    const [ordRes, custRes] = await Promise.all([
+      apiFetch(`${API}/Orders?restaurantId=${currentRestaurantId}`),
+      apiFetch(`${API}/Customers?restaurantId=${currentRestaurantId}`)
+    ]);
+    const rawOrders    = ordRes.ok    ? await ordRes.json()    : [];
+    const rawCustomers = custRes.ok ? await custRes.json() : [];
+    const custMap = {};
+    rawCustomers.forEach(c => { custMap[c.customerId||c.CustomerId] = c; });
+
+    allOrders = rawOrders.map(o => {
+      const orderId     = o.orderId     || o.OrderId     || o.id   || '?';
+      const customerId  = o.customerId  || o.CustomerId;
+      const status      = o.status      || o.Status      || 'Placed';
+      const totalAmount = parseFloat(o.totalAmount||o.TotalAmount||0);
+      const orderDate   = o.orderDate   || o.OrderDate   || o.createdAt || o.CreatedAt || null;
+      const cust        = custMap[customerId] || {};
+      const customerName  = o.customerName  || o.CustomerName  || cust.fullName  || cust.FullName  || 'غير معروف';
+      const customerPhone = o.customerPhone || o.CustomerPhone || cust.phoneNumber || '';
+      const items = (o.items||o.orderItems||o.OrderItems||[]).map(i=>({
+        name:      i.menuName||i.MenuName||i.menuItem?.name||i.name||'صنف',
+        quantity:  i.quantity ||i.Quantity ||1,
+        unitPrice: i.unitPrice||i.UnitPrice||i.price||0,
+      }));
+      return {orderId,customerId,status,totalAmount,orderDate,customerName,customerPhone,items};
+    });
+
+    const newCount = allOrders.filter(o=>o.status==='Placed'||o.status==='Pending').length;
+    if (prevNewOrders > 0 && newCount > prevNewOrders) playNewOrder();
+    prevNewOrders = newCount;
+
+    const badge = document.getElementById('nav-orders-badge');
+    if (newCount>0){badge.textContent=newCount;badge.style.display='inline';}
+    else badge.style.display='none';
+
+    updateOrderStats(); renderOrders(); renderOverviewOrders();
+  } catch(e) { console.error('loadOrders:',e); }
+}
+
+function updateOrderStats() {
+  const today = new Date().toISOString().slice(0,10);
+  const placed  = allOrders.filter(o=>o.status==='Placed'||o.status==='Pending').length;
+  const prep    = allOrders.filter(o=>o.status==='Preparing').length;
+  const ready   = allOrders.filter(o=>o.status==='Ready').length;
+  const done    = allOrders.filter(o=>o.status==='Delivered'&&(o.orderDate||'').startsWith(today)).length;
+  const custs   = new Set(allOrders.map(o=>o.customerId).filter(Boolean)).size;
+  ['stat-new','o-new'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=placed; });
+  ['stat-prep','o-prep'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=prep; });
+  const sc=document.getElementById('stat-cust'); if(sc) sc.textContent=custs;
+  const or=document.getElementById('o-ready');   if(or) or.textContent=ready;
+  ['stat-done','o-done'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=done; });
+}
+
+function renderOrders() {
+  const filtered = ordersFilter==='all' ? allOrders : allOrders.filter(o=>o.status===ordersFilter);
+  const ord = {Placed:0,Pending:1,Preparing:2,Ready:3,Delivered:4,Cancelled:5};
+  filtered.sort((a,b)=>(ord[a.status]??9)-(ord[b.status]??9));
+  const tbody = document.getElementById('orders-tbody');
+  tbody.innerHTML = filtered.map(o => {
+    const t = o.orderDate ? new Date(o.orderDate).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : '--';
+    const items = o.items.map(i=>`<span style="display:block;background:#f0f7ff;border-radius:5px;padding:1px 7px;margin:1px 0;font-size:.8rem"><b>${i.name}</b> ×${i.quantity} <span style="color:#27ae60">(${(i.unitPrice*i.quantity).toFixed(2)} د)</span></span>`).join('')||'--';
+    return `<tr>
+      <td><strong>#${o.orderId}</strong></td>
+      <td><div style="font-weight:700">${o.customerName}</div><small style="color:#aaa">${o.customerPhone}</small></td>
+      <td><div style="max-width:200px">${items}</div></td>
+      <td><strong style="color:#27ae60">${o.totalAmount.toFixed(2)} د</strong></td>
+      <td style="font-size:.83rem">${t}</td>
+      <td><span class="badge-status badge-${o.status}">${STATUS_AR[o.status]||o.status}</span></td>
+      <td><div class="d-flex gap-1 flex-wrap">${getOrderBtns(o)}</div></td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="7" class="text-center py-4 text-muted">لا توجد طلبات</td></tr>`;
+}
+
+function renderOverviewOrders() {
+  const recent = [...allOrders].sort((a,b)=>new Date(b.orderDate||0)-new Date(a.orderDate||0)).slice(0,6);
+  const tbody = document.getElementById('overview-orders');
+  tbody.innerHTML = recent.map(o=>{
+    const t = o.orderDate ? new Date(o.orderDate).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : '--';
+    return `<tr>
+      <td><strong>#${o.orderId}</strong></td>
+      <td>${o.customerName}</td>
+      <td><strong style="color:#27ae60">${o.totalAmount.toFixed(2)} د</strong></td>
+      <td style="font-size:.83rem">${t}</td>
+      <td><span class="badge-status badge-${o.status}">${STATUS_AR[o.status]||o.status}</span></td>
+      <td><div class="d-flex gap-1">${getOrderBtns(o)}</div></td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="6" class="text-center py-3 text-muted">لا توجد طلبات</td></tr>`;
+}
+
+function getOrderBtns(o) {
+  let b='';
+  if(['Placed','Pending'].includes(o.status)) b+=`<button class="btn-action btn-prepare" onclick="updateOrder(${o.orderId},'Preparing')">🔥 تحضير</button>`;
+  if(o.status==='Preparing') b+=`<button class="btn-action btn-ready" onclick="updateOrder(${o.orderId},'Ready')">✅ جاهز</button>`;
+  if(o.status==='Ready') b+=`<button class="btn-action btn-deliver" onclick="updateOrder(${o.orderId},'Delivered')">🚀 تسليم</button>`;
+  if(['Placed','Pending','Preparing'].includes(o.status)) b+=`<button class="btn-action btn-delete" onclick="updateOrder(${o.orderId},'Cancelled')">✕</button>`;
+  return b;
+}
+
+async function updateOrder(id, status) {
+  try {
+    const res = await apiFetch(`${API}/Orders/${id}`, {method:'PUT', body:JSON.stringify({status})});
+    if(res.ok) {
+      const o = allOrders.find(x=>x.orderId==id);
+      if(o){o.status=status; updateOrderStats(); renderOrders(); renderOverviewOrders();}
+      showToast(`✅ الطلب #${id} → ${STATUS_AR[status]||status}`,'success');
+    } else showToast('❗ فشل تحديث الطلب','error');
+  } catch(e) { showToast('❗ خطأ في الاتصال','error'); }
+}
+
+function filterOrders(f, btn) {
+  ordersFilter=f;
+  document.querySelectorAll('.filter-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderOrders();
+}
+
+// ════════════════════════════════════════════════════
+//  MENU
+// ════════════════════════════════════════════════════
+async function loadMenuItems() {
+  try {
+    const res = await apiFetch(`${API}/MenuItems?restaurantId=${currentRestaurantId}`);
+    if(!res.ok) throw new Error(res.status);
+    allMenuItems = (await res.json()).map(i=>({
+      menuItemId: i.menuItemId||i.MenuItemId,
+      name:       i.name||i.Name||'',
+      category:   i.category||i.Category||'',
+      price:      parseFloat(i.price||i.Price||0),
+      description:i.description||i.Description||'',
+      isAvailable:i.isAvailable!==false,
+    }));
+    renderMenu();
+  } catch(e) { console.error('loadMenuItems:',e); }
+}
+
+function renderMenu() {
+  const tbody=document.getElementById('menu-tbody');
+  tbody.innerHTML=allMenuItems.map(i=>`<tr>
+    <td>${i.menuItemId}</td>
+    <td><strong>${i.name}</strong><br><small style="color:#aaa">${i.description||''}</small></td>
+    <td><span style="background:#f0f7ff;padding:2px 10px;border-radius:50px;font-size:.8rem;color:#3498db">${i.category||'—'}</span></td>
+    <td><strong style="color:#27ae60">${i.price.toFixed(2)} د</strong></td>
+    <td>${i.isAvailable?'<span class="badge-status badge-Ready">متاح</span>':'<span class="badge-status badge-Cancelled">غير متاح</span>'}</td>
+    <td>
+      <button class="btn-action btn-prepare" onclick="editMenuItem(${i.menuItemId})">✏️ تعديل</button>
+      <button class="btn-action btn-delete"  onclick="deleteMenuItem(${i.menuItemId})">🗑️ حذف</button>
+    </td>
+  </tr>`).join('')||`<tr><td colspan="6" class="text-center py-4 text-muted">لا توجد أصناف</td></tr>`;
+}
+
+function openMenuModal() {
+  ['m-id','m-name','m-cat','m-price','m-desc'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('m-avail').value='true';
+  document.getElementById('menu-modal-title').textContent='إضافة صنف جديد';
+  document.getElementById('menu-modal').classList.add('open');
+}
+
+function editMenuItem(id) {
+  const item=allMenuItems.find(i=>i.menuItemId===id); if(!item) return;
+  document.getElementById('m-id').value=id;
+  document.getElementById('m-name').value=item.name;
+  document.getElementById('m-cat').value=item.category;
+  document.getElementById('m-price').value=item.price;
+  document.getElementById('m-desc').value=item.description;
+  document.getElementById('m-avail').value=item.isAvailable.toString();
+  document.getElementById('menu-modal-title').textContent='تعديل الصنف';
+  document.getElementById('menu-modal').classList.add('open');
+}
+
+function closeMenuModal() { document.getElementById('menu-modal').classList.remove('open'); }
+
+async function saveMenuItem() {
+  const id=document.getElementById('m-id').value;
+  const name=document.getElementById('m-name').value.trim();
+  const price=parseFloat(document.getElementById('m-price').value);
+  if(!name){showToast('❗ أدخل اسم الصنف','error');return;}
+  if(isNaN(price)){showToast('❗ أدخل سعراً صحيحاً','error');return;}
+  const body={name,price,
+    category:   document.getElementById('m-cat').value.trim(),
+    description:document.getElementById('m-desc').value.trim(),
+    isAvailable:document.getElementById('m-avail').value==='true',
+    restaurantId:currentRestaurantId,
+  };
+  try {
+    const url=id?`${API}/MenuItems/${id}`:`${API}/MenuItems`;
+    const res=await apiFetch(url,{method:id?'PUT':'POST',body:JSON.stringify(body)});
+    if(res.ok){showToast(id?'✅ تم تعديل الصنف':'✅ تمت الإضافة','success');closeMenuModal();await loadMenuItems();}
+    else showToast('❗ فشل الحفظ: '+res.status,'error');
+  } catch(e){showToast('❗ خطأ في الاتصال','error');}
+}
+
+async function deleteMenuItem(id) {
+  if(!confirm('حذف هذا الصنف؟'))return;
+  const res=await apiFetch(`${API}/MenuItems/${id}`,{method:'DELETE'});
+  if(res.ok){showToast('✅ تم الحذف','success');await loadMenuItems();}
+  else showToast('❗ فشل الحذف','error');
+}
+
+// ════════════════════════════════════════════════════
+//  CUSTOMERS
+// ════════════════════════════════════════════════════
+async function loadCustomers() {
+  try {
+    const res=await apiFetch(`${API}/Customers?restaurantId=${currentRestaurantId}`);
+    if(!res.ok) throw new Error(res.status);
+    allCustomers=(await res.json()).map(c=>({
+      customerId: c.customerId||c.CustomerId,
+      name:       c.fullName||c.FullName||c.name||'غير معروف',
+      phone:      c.phoneNumber||c.PhoneNumber||'',
+      createdAt:  c.createdAt||c.CreatedAt||'',
+    }));
+    renderCustomers();
+  } catch(e) { console.error('loadCustomers:',e); }
+}
+
+function renderCustomers() {
+  const tbody=document.getElementById('customers-tbody');
+  tbody.innerHTML=allCustomers.map(c=>`<tr>
+    <td>${c.customerId}</td>
+    <td><strong>${c.name}</strong></td>
+    <td><span style="direction:ltr;display:inline-block">${c.phone}</span></td>
+    <td>${c.createdAt?new Date(c.createdAt).toLocaleDateString('ar'):'--'}</td>
+    <td><button class="btn-action btn-delete" onclick="deleteCustomer(${c.customerId})">🗑️ حذف</button></td>
+  </tr>`).join('')||`<tr><td colspan="5" class="text-center py-4 text-muted">لا يوجد عملاء</td></tr>`;
+}
+
+async function deleteCustomer(id) {
+  if(!confirm('حذف هذا العميل؟'))return;
+  const res=await apiFetch(`${API}/Customers/${id}`,{method:'DELETE'});
+  if(res.ok){showToast('✅ تم الحذف','success');await loadCustomers();}
+}
+
+// ════════════════════════════════════════════════════
+//  TABLES
+// ════════════════════════════════════════════════════
+async function loadTables() {
+  try {
+    const res=await apiFetch(`${API}/RestaurantTables?restaurantId=${currentRestaurantId}`);
+    allTables=res.ok?await res.json():[];
+    renderTables();
+  } catch(e){}
+}
+
+function renderTables() {
+  const tbody=document.getElementById('tables-tbody');
+  tbody.innerHTML=allTables.map(t=>`<tr>
+    <td>${t.tableId||t.id}</td>
+    <td><strong>${t.tableNumber||t.TableNumber||'--'}</strong></td>
+    <td>${t.capacity||t.Capacity||'--'} أشخاص</td>
+    <td><span class="badge-status ${t.isAvailable?'badge-Ready':'badge-Placed'}">${t.isAvailable?'متاحة':'محجوزة'}</span></td>
+    <td><button class="btn-action btn-delete" onclick="deleteTable(${t.tableId||t.id})">🗑️ حذف</button></td>
+  </tr>`).join('')||`<tr><td colspan="5" class="text-center py-4 text-muted">لا توجد طاولات</td></tr>`;
+}
+
+async function addTable() {
+  const num=prompt('رقم الطاولة:'); if(!num) return;
+  const cap=prompt('السعة (أشخاص):'); if(!cap) return;
+  const res=await apiFetch(`${API}/RestaurantTables`,{method:'POST',
+    body:JSON.stringify({tableNumber:parseInt(num),capacity:parseInt(cap),restaurantId:currentRestaurantId,isAvailable:true})});
+  if(res.ok){showToast('✅ تمت إضافة الطاولة','success');await loadTables();}
+  else showToast('❗ فشل الإضافة','error');
+}
+
+async function deleteTable(id) {
+  if(!confirm('حذف هذه الطاولة؟'))return;
+  const res=await apiFetch(`${API}/RestaurantTables/${id}`,{method:'DELETE'});
+  if(res.ok){showToast('✅ تم الحذف','success');await loadTables();}
+}
+
+// ════════════════════════════════════════════════════
+//  RESERVATIONS
+// ════════════════════════════════════════════════════
+async function loadReservations() {
+  try {
+    const res=await apiFetch(`${API}/Reservations?restaurantId=${currentRestaurantId}`);
+    allReservations=res.ok?await res.json():[];
+    renderReservations();
+  } catch(e){}
+}
+
+function renderReservations() {
+  const tbody=document.getElementById('reservations-tbody');
+  tbody.innerHTML=allReservations.map(r=>`<tr>
+    <td>${r.reservationId||r.id}</td>
+    <td><strong>${r.customerName||r.fullName||'غير معروف'}</strong></td>
+    <td>${r.phone||r.phoneNumber||'--'}</td>
+    <td>${r.reservationDate?new Date(r.reservationDate).toLocaleDateString('ar'):'--'}</td>
+    <td>${r.reservationTime||r.time||'--'}</td>
+    <td>${r.numberOfGuests||r.guestCount||'--'}</td>
+    <td><button class="btn-action btn-delete" onclick="cancelReservation(${r.reservationId||r.id})">❌ إلغاء</button></td>
+  </tr>`).join('')||`<tr><td colspan="7" class="text-center py-4 text-muted">لا توجد حجوزات</td></tr>`;
+}
+
+async function cancelReservation(id) {
+  if(!confirm('إلغاء هذا الحجز؟'))return;
+  const res=await apiFetch(`${API}/Reservations/${id}`,{method:'DELETE'});
+  if(res.ok){showToast('✅ تم الإلغاء','success');await loadReservations();}
+}
+
+// ════════════════════════════════════════════════════
+//  SETTINGS
+// ════════════════════════════════════════════════════
+async function loadRestaurantSettings() {
+  try {
+    const res=await apiFetch(`${API}/RestaurantSettings?restaurantId=${currentRestaurantId}`);
+    if(!res.ok) throw new Error(res.status);
+    const s=await res.json();
+    const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
+    set('s-name',   s.restaurantName||s.name);
+    set('s-phone',  s.phone);
+    set('s-open',   s.openTime||s.OpenTime||'10:00');
+    set('s-close',  s.closeTime||s.CloseTime||'23:00');
+    set('s-closed-msg', s.closedMessage);
+    const c1=s.primaryColor||'#E63946', c2=s.secondaryColor||'#FF6B35';
+    set('s-color1',c1); set('s-color1-text',c1);
+    set('s-color2',c2); set('s-color2-text',c2);
+    updateSettingsPreview();
+  } catch(e){ console.error('loadSettings:',e); }
+  checkStatus();
+}
+
+async function saveRestaurantSettings() {
+  const btn=document.querySelector('[onclick="saveRestaurantSettings()"]');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin ms-2"></i> جارٍ الحفظ...';}
+  const get=id=>document.getElementById(id)?.value||'';
+  const data={
+    restaurantName: get('s-name'), name: get('s-name'),
+    phone:          get('s-phone'),
+    openTime:       get('s-open'), closeTime: get('s-close'),
+    closedMessage:  get('s-closed-msg'),
+    primaryColor:   get('s-color1-text'),
+    secondaryColor: get('s-color2-text'),
+    restaurantId:   currentRestaurantId,
+  };
+  try {
+    const res=await apiFetch(`${API}/RestaurantSettings`,{method:'PUT',body:JSON.stringify(data)});
+    if(res.ok){
+      showToast('✅ تم حفظ الإعدادات بنجاح','success');
+      currentRestaurantName=data.restaurantName;
+      document.getElementById('sidebar-restaurant-name').textContent=currentRestaurantName;
+      const sess=JSON.parse(sessionStorage.getItem('rms_session')||'{}');
+      sess.name=currentRestaurantName;
+      sessionStorage.setItem('rms_session',JSON.stringify(sess));
+      updateSettingsPreview();
+    } else showToast('❗ فشل الحفظ: '+res.status,'error');
+  } catch(e){ showToast('❗ خطأ في الاتصال','error'); }
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="fas fa-save ms-2"></i> حفظ إعدادات المطعم';}
+}
+
+async function checkStatus() {
+  try {
+    const res=await apiFetch(`${API}/RestaurantSettings/isopen`);
+    if(!res.ok) return;
+    const d=await res.json();
+    const open=d.isOpen!==undefined?d.isOpen:d.IsOpen;
+    const dot=document.getElementById('status-dot');
+    const txt=document.getElementById('sidebar-status-text');
+    const badge=document.getElementById('s-status-badge');
+    const detail=document.getElementById('s-status-detail');
+    if(dot){dot.className=`dot ${open?'dot-open':'dot-closed'}`;}
+    if(txt){txt.textContent=open?'مفتوح الآن':'مغلق';txt.style.color=open?'#2ecc71':'#e74c3c';}
+    if(badge){badge.className=`badge-status ${open?'badge-Ready':'badge-Cancelled'} mb-3`;badge.textContent=open?'✅ المطعم مفتوح':'🔴 المطعم مغلق';}
+    if(detail){detail.textContent=d.message||(open?'يستقبل الطلبات الآن':'مغلق حالياً');}
+  } catch(e){}
+}
+
+// ════════════════════════════════════════════════════
+//  CHANGE CREDENTIALS
+// ════════════════════════════════════════════════════
+async function changeUsername() {
+  const newUser=document.getElementById('new-username').value.trim();
+  const curPass=document.getElementById('current-password').value.trim();
+  if(!newUser){showToast('❗ أدخل اسم المستخدم الجديد','error');return;}
+  if(!curPass){showToast('❗ أدخل كلمة المرور للتحقق','error');return;}
+  try {
+    const res=await apiFetch(`${API}/Auth/change-username`,{method:'PUT',
+      body:JSON.stringify({currentUsername:currentUsername,newUsername:newUser,password:curPass,restaurantId:currentRestaurantId})});
+    if(res.ok){
+      currentUsername=newUser;
+      const sess=JSON.parse(sessionStorage.getItem('rms_session')||'{}');
+      sess.username=newUser; sessionStorage.setItem('rms_session',JSON.stringify(sess));
+      showToast('✅ تم تغيير اسم المستخدم','success');
+      document.getElementById('new-username').value='';
+      document.getElementById('current-password').value='';
+    } else {
+      const err=await res.text().catch(()=>'');
+      showToast('❗ فشل: '+(err||res.status),'error');
+    }
+  } catch(e){showToast('❗ خطأ في الاتصال','error');}
+}
+
+async function changePassword() {
+  const curPass =document.getElementById('current-password').value.trim();
+  const newPass =document.getElementById('new-password').value.trim();
+  const confPass=document.getElementById('confirm-password').value.trim();
+  if(!curPass) {showToast('❗ أدخل كلمة المرور الحالية','error');return;}
+  if(!newPass) {showToast('❗ أدخل كلمة المرور الجديدة','error');return;}
+  if(newPass!==confPass){showToast('❗ كلمات المرور غير متطابقة','error');return;}
+  if(newPass.length<6){showToast('❗ كلمة المرور يجب 6 أحرف على الأقل','error');return;}
+  try {
+    const res=await apiFetch(`${API}/Auth/change-password`,{method:'PUT',
+      body:JSON.stringify({username:currentUsername,currentPassword:curPass,newPassword:newPass,restaurantId:currentRestaurantId})});
+    if(res.ok){
+      showToast('✅ تم تغيير كلمة المرور — سيتم الخروج','success');
+      ['current-password','new-password','confirm-password'].forEach(id=>document.getElementById(id).value='');
+      setTimeout(doLogout,2000);
+    } else {
+      const err=await res.text().catch(()=>'');
+      showToast('❗ فشل: '+(err||res.status),'error');
+    }
+  } catch(e){showToast('❗ خطأ في الاتصال','error');}
+}
+
+// ════════════════════════════════════════════════════
+//  SETTINGS PREVIEW
+// ════════════════════════════════════════════════════
+function updateSettingsPreview() {
+  const name=document.getElementById('s-name')?.value||'مطعمي';
+  const c1=document.getElementById('s-color1-text')?.value||'#E63946';
+  const c2=document.getElementById('s-color2-text')?.value||'#FF6B35';
+  const ph=document.getElementById('prev-header');
+  const pn=document.getElementById('prev-name');
+  const pp=document.getElementById('prev-price');
+  const pb=document.getElementById('prev-btn');
+  if(ph) ph.style.background=`linear-gradient(135deg,${c1},${c2})`;
+  if(pn) pn.textContent='🍽️ '+name;
+  if(pp) pp.style.color=c2;
+  if(pb) pb.style.background=c1;
+}
+
+['s-name','s-color1-text','s-color2-text'].forEach(id=>{
+  document.getElementById(id)?.addEventListener('input',updateSettingsPreview);
+});
+document.getElementById('s-color1')?.addEventListener('input',e=>{
+  document.getElementById('s-color1-text').value=e.target.value; updateSettingsPreview();
+});
+document.getElementById('s-color2')?.addEventListener('input',e=>{
+  document.getElementById('s-color2-text').value=e.target.value; updateSettingsPreview();
+});
+
+// ════════════════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════════════════
+let toastT;
+function showToast(msg,type='') {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='show '+type;
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>el.className='',3500);
+}
+
+// ════════════════════════════════════════════════════
+//  AUTO REFRESH — كل 15 ثانية
+// ════════════════════════════════════════════════════
+setInterval(()=>{ if(currentRestaurantId>0) refreshAll(); },15000);
+setInterval(()=>{ if(currentRestaurantId>0) checkStatus(); },30000);
 </script>
-</div><!-- end main-dashboard -->
 </body>
 </html>

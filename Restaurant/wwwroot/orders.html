@@ -341,7 +341,15 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const API = 'https://localhost:7122/api';
+const API = 'https://rohan-exceptive-antonio.ngrok-free.dev/api';
+
+// Helper: adds ngrok bypass header to every request
+function apiFetch(url, options = {}) {
+  options.headers = options.headers || {};
+  options.headers['ngrok-skip-browser-warning'] = 'true';
+  return fetch(url, options);
+}
+
 let allOrders = [];
 let currentFilter = 'all';
 let prevOrderCount = 0;
@@ -355,10 +363,10 @@ async function loadOrders(showSpin = false) {
     try {
         // جلب الطلبات مع بيانات العميل والأصناف
         const [ordersRes, customersRes, itemsRes, menuRes] = await Promise.all([
-            fetch(`${API}/Orders`),
-            fetch(`${API}/Customers`),
-            fetch(`${API}/OrderItems`),
-            fetch(`${API}/MenuItems`),
+            apiFetch(`${API}/Orders`),
+            apiFetch(`${API}/Customers`),
+            apiFetch(`${API}/OrderItems`),
+            apiFetch(`${API}/MenuItems`),
         ]);
 
         allOrders   = await ordersRes.json();
@@ -372,11 +380,11 @@ async function loadOrders(showSpin = false) {
 
         allOrders = allOrders.map(o => ({
             ...o,
-            customerName: customerMap[o.customerId]?.fullName || 'غير معروف',
-            customerPhone: customerMap[o.customerId]?.phoneNumber || '',
+            customerUsername: customerMap[o.customerId]?.fullName || 'غير معروف',
+            customerPassword: customerMap[o.customerId]?.phoneNumber || '',
             items: orderItems
-                .filter(i => i.orderId === o.orderId)
-                .map(i => ({ ...i, menuItemName: menuMap[i.menuItemId]?.name || 'صنف' }))
+                .filter(i => i.OrderId === o.OrderId)
+                .map(i => ({ ...i, menuItemUsername: menuMap[i.menuItemId]?.name || 'صنف' }))
         }));
 
         // إشعار بطلب جديد
@@ -412,7 +420,7 @@ function updateStats() {
     document.getElementById('count-ready').textContent =
         allOrders.filter(o => o.status === 'Ready').length;
     document.getElementById('count-delivered').textContent =
-        allOrders.filter(o => o.status === 'Delivered' && o.orderDate?.startsWith(today)).length;
+        allOrders.filter(o => o.status === 'Delivered' && o.OrderDate?.startsWith(today)).length;
 }
 
 // ─── RENDER ──────────────────────────────────────────
@@ -432,7 +440,7 @@ function renderOrders() {
     // ترتيب: الجديد أولاً
     const statusOrder = { Placed:0, Preparing:1, Ready:2, Delivered:3, Cancelled:4 };
     filtered.sort((a,b) => (statusOrder[a.status]??9) - (statusOrder[b.status]??9)
-        || new Date(b.orderDate) - new Date(a.orderDate));
+        || new Date(b.OrderDate) - new Date(a.OrderDate));
 
     const tbody = document.getElementById('orders-tbody');
     if (!filtered.length) {
@@ -447,20 +455,20 @@ function renderOrders() {
 
     tbody.innerHTML = filtered.map(o => {
         const itemCount = o.items?.length || 0;
-        const time = o.orderDate
-            ? new Date(o.orderDate).toLocaleTimeString('ar', {hour:'2-digit', minute:'2-digit'})
+        const time = o.OrderDate
+            ? new Date(o.OrderDate).toLocaleTimeString('ar', {hour:'2-digit', minute:'2-digit'})
             : '--';
         const isNew = o.status === 'Placed';
 
         return `
         <tr class="${isNew ? 'new-order-row' : ''}">
-            <td><strong>#${o.orderId}</strong></td>
+            <td><strong>#${o.OrderId}</strong></td>
             <td>
-                <div style="font-weight:700">${o.customerName}</div>
+                <div style="font-weight:700">${o.CustomerName}</div>
                 <div style="font-size:.8rem;color:#aaa">${o.customerPhone}</div>
             </td>
             <td>${itemCount} صنف</td>
-            <td><span class="total-chip">${o.totalAmount?.toFixed(2) || '0.00'} د</span></td>
+            <td><span class="total-chip">${o.TotalAmount?.toFixed(2) || '0.00'} د</span></td>
             <td style="font-size:.85rem">${time}</td>
             <td><span class="status-badge status-${o.status}">${STATUS_LABELS[o.status] || o.status}</span></td>
             <td>${getActionButtons(o)}</td>
@@ -469,30 +477,30 @@ function renderOrders() {
 }
 
 function getActionButtons(o) {
-    let btns = `<button class="action-btn btn-details" onclick="showDetails(${o.orderId})"><i class="fas fa-eye"></i></button>`;
+    let btns = `<button class="action-btn btn-details" onclick="showDetails(${o.OrderId})"><i class="fas fa-eye"></i></button>`;
     if (o.status === 'Placed')
-        btns += `<button class="action-btn btn-prepare" onclick="updateStatus(${o.orderId}, 'Preparing')">🔥 تحضير</button>`;
+        btns += `<button class="action-btn btn-prepare" onclick="updateStatus(${o.OrderId}, 'Preparing')">🔥 تحضير</button>`;
     if (o.status === 'Preparing')
-        btns += `<button class="action-btn btn-ready" onclick="updateStatus(${o.orderId}, 'Ready')">✅ جاهز</button>`;
+        btns += `<button class="action-btn btn-ready" onclick="updateStatus(${o.OrderId}, 'Ready')">✅ جاهز</button>`;
     if (o.status === 'Ready')
-        btns += `<button class="action-btn btn-deliver" onclick="updateStatus(${o.orderId}, 'Delivered')">🚀 تسليم</button>`;
+        btns += `<button class="action-btn btn-deliver" onclick="updateStatus(${o.OrderId}, 'Delivered')">🚀 تسليم</button>`;
     if (['Placed','Preparing'].includes(o.status))
-        btns += `<button class="action-btn btn-cancel" onclick="updateStatus(${o.orderId}, 'Cancelled')">✕</button>`;
+        btns += `<button class="action-btn btn-cancel" onclick="updateStatus(${o.OrderId}, 'Cancelled')">✕</button>`;
     return btns;
 }
 
 // ─── UPDATE STATUS ───────────────────────────────────
-async function updateStatus(orderId, newStatus) {
-    const order = allOrders.find(o => o.orderId === orderId);
+async function updateStatus(OrderId, newStatus) {
+    const order = allOrders.find(o => o.OrderId === OrderId);
     if (!order) return;
 
     const updated = { ...order, status: newStatus };
-    delete updated.customerName;
+    delete updated.CustomerName;
     delete updated.customerPhone;
     delete updated.items;
 
     try {
-        const res = await fetch(`${API}/Orders/${orderId}`, {
+        const res = await apiFetch(`${API}/Orders/${OrderId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updated),
@@ -506,8 +514,8 @@ async function updateStatus(orderId, newStatus) {
 }
 
 // ─── DETAILS MODAL ───────────────────────────────────
-function showDetails(orderId) {
-    const o = allOrders.find(x => x.orderId === orderId);
+function showDetails(OrderId) {
+    const o = allOrders.find(x => x.OrderId === OrderId);
     if (!o) return;
 
     const itemsHtml = o.items?.length
@@ -523,11 +531,11 @@ function showDetails(orderId) {
         <div class="mb-3">
             <div style="display:flex;justify-content:space-between;margin-bottom:8px">
                 <span style="color:#7f8c8d">رقم الطلب</span>
-                <strong>#${o.orderId}</strong>
+                <strong>#${o.OrderId}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;margin-bottom:8px">
                 <span style="color:#7f8c8d">العميل</span>
-                <strong>${o.customerName}</strong>
+                <strong>${o.CustomerName}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;margin-bottom:8px">
                 <span style="color:#7f8c8d">الهاتف</span>
@@ -544,13 +552,13 @@ function showDetails(orderId) {
         <hr>
         <div style="display:flex;justify-content:space-between;font-size:1.1rem">
             <strong>الإجمالي</strong>
-            <strong style="color:#27ae60">${o.totalAmount?.toFixed(2) || '0.00'} دينار</strong>
+            <strong style="color:#27ae60">${o.TotalAmount?.toFixed(2) || '0.00'} دينار</strong>
         </div>
         ${['Placed','Preparing','Ready'].includes(o.status) ? `
         <div style="margin-top:16px;display:flex;gap:8px">
-            ${o.status==='Placed'    ? `<button class="action-btn btn-prepare w-100" onclick="updateStatus(${o.orderId},'Preparing');bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide()">🔥 ابدأ التحضير</button>` : ''}
-            ${o.status==='Preparing' ? `<button class="action-btn btn-ready   w-100" onclick="updateStatus(${o.orderId},'Ready');bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide()">✅ جاهز للتسليم</button>` : ''}
-            ${o.status==='Ready'     ? `<button class="action-btn btn-deliver  w-100" onclick="updateStatus(${o.orderId},'Delivered');bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide()">🚀 تم التسليم</button>` : ''}
+            ${o.status==='Placed'    ? `<button class="action-btn btn-prepare w-100" onclick="updateStatus(${o.OrderId},'Preparing');bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide()">🔥 ابدأ التحضير</button>` : ''}
+            ${o.status==='Preparing' ? `<button class="action-btn btn-ready   w-100" onclick="updateStatus(${o.OrderId},'Ready');bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide()">✅ جاهز للتسليم</button>` : ''}
+            ${o.status==='Ready'     ? `<button class="action-btn btn-deliver  w-100" onclick="updateStatus(${o.OrderId},'Delivered');bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide()">🚀 تم التسليم</button>` : ''}
         </div>` : ''}`;
 
     new bootstrap.Modal(document.getElementById('orderModal')).show();
@@ -592,3 +600,29 @@ setInterval(() => loadOrders(), 30000);
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

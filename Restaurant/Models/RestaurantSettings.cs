@@ -7,6 +7,9 @@ namespace Restaurant.Models
         [Key]
         public int Id { get; set; }
 
+        // ✅ ربط الإعدادات بمطعم محدد
+        public int RestaurantId { get; set; } = 0;
+
         [Required]
         public string RestaurantName { get; set; } = string.Empty;
 

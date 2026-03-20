@@ -57,7 +57,7 @@ namespace Restaurant.Controllers
             var exists = await _context.Restaurants.AnyAsync(r => r.Username == req.Username);
             if (exists) return BadRequest(new { message = "اسم المستخدم موجود مسبقاً" });
 
-            var restaurant = new RestaurantProfile 
+            var restaurant = new RestaurantProfile
             {
                 Name = req.Name,
                 Username = req.Username,
@@ -97,9 +97,63 @@ namespace Restaurant.Controllers
             await _context.SaveChangesAsync();
             return Ok(new { success = true, isActive = restaurant.IsActive });
         }
+
+        // ── إعادة تعيين كلمة المرور (من السوبر أدمن) ──────────────
+        [HttpPut("reset-password")]
+        public async Task<ActionResult> ResetPassword([FromQuery] string adminPassword, [FromQuery] string username, [FromQuery] string newPassword)
+        {
+            if (adminPassword != "admin123")
+                return Unauthorized(new { message = "غير مصرح" });
+
+            var restaurant = await _context.Restaurants.FirstOrDefaultAsync(r => r.Username == username);
+            if (restaurant == null)
+                return NotFound(new { message = "المطعم غير موجود" });
+
+            restaurant.Password = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true, message = $"تم تغيير كلمة مرور {restaurant.Name} بنجاح" });
+        }
+
+        // ── تغيير كلمة المرور (من صاحب المطعم) ────────────────────
+        [HttpPut("change-password")]
+        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest req)
+        {
+            var restaurant = await _context.Restaurants.FirstOrDefaultAsync(r => r.Username == req.Username);
+            if (restaurant == null)
+                return NotFound(new { message = "المستخدم غير موجود" });
+
+            if (!BCrypt.Net.BCrypt.Verify(req.CurrentPassword, restaurant.Password))
+                return Unauthorized(new { message = "كلمة المرور الحالية غلط" });
+
+            if (req.NewPassword.Length < 6)
+                return BadRequest(new { message = "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
+
+            restaurant.Password = BCrypt.Net.BCrypt.HashPassword(req.NewPassword);
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true, message = "تم تغيير كلمة المرور بنجاح" });
+        }
+
+        // ── تغيير اسم المستخدم (من صاحب المطعم) ───────────────────
+        [HttpPut("change-username")]
+        public async Task<ActionResult> ChangeUsername([FromBody] ChangeUsernameRequest req)
+        {
+            var restaurant = await _context.Restaurants.FirstOrDefaultAsync(r => r.Username == req.CurrentUsername);
+            if (restaurant == null)
+                return NotFound(new { message = "المستخدم غير موجود" });
+
+            if (!BCrypt.Net.BCrypt.Verify(req.Password, restaurant.Password))
+                return Unauthorized(new { message = "كلمة المرور غلط" });
+
+            var exists = await _context.Restaurants.AnyAsync(r => r.Username == req.NewUsername && r.RestaurantId != restaurant.RestaurantId);
+            if (exists)
+                return BadRequest(new { message = "اسم المستخدم موجود مسبقاً" });
+
+            restaurant.Username = req.NewUsername;
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true, message = "تم تغيير اسم المستخدم بنجاح" });
+        }
     }
 
-    // ─── هذه هي الـ Classes التي كانت ناقصة وتسببت بالخطأ ───
     public class LoginRequest
     {
         public string Username { get; set; } = string.Empty;
@@ -118,5 +172,21 @@ namespace Restaurant.Controllers
         public string? CloseTime { get; set; }
         public string? Phone { get; set; }
         public string? Address { get; set; }
+    }
+
+    public class ChangePasswordRequest
+    {
+        public string Username { get; set; } = string.Empty;
+        public string CurrentPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+        public int RestaurantId { get; set; }
+    }
+
+    public class ChangeUsernameRequest
+    {
+        public string CurrentUsername { get; set; } = string.Empty;
+        public string NewUsername { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public int RestaurantId { get; set; }
     }
 }
