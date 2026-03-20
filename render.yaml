@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: restaurant-system
+    runtime: image
+    repo: https://github.com/kkbb22/RestaurantSystem
+    plan: free
+    buildCommand: ./build.sh
+    startCommand: ./build/Restaurant
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
