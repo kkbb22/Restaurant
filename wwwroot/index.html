@@ -301,7 +301,7 @@
 // ═══════════════════════════════════════════════════
 //  CONFIG
 // ═══════════════════════════════════════════════════
-const API = 'https://rohan-exceptive-antonio.ngrok-free.dev/api';
+const API = 'https://restaurant-production-9092.up.railway.app/api';
 
 // Get restaurantId from URL or default to 1
 const urlParams   = new URLSearchParams(window.location.search);
@@ -309,7 +309,6 @@ const RESTAURANT_ID = parseInt(urlParams.get('restaurantId') || urlParams.get('R
 
 function apiFetch(url, options = {}) {
   options.headers = options.headers || {};
-  options.headers['ngrok-skip-browser-warning'] = 'true';
   if (options.headers['Content-Type'] === undefined && options.method && options.method !== 'GET') {
     options.headers['Content-Type'] = 'application/json';
   }

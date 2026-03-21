@@ -430,6 +430,7 @@ body { background: #f0f2f5; min-height: 100vh; }
         <div class="order-filter-tabs">
           <button class="filter-tab active" onclick="filterOrders('all',this)">الكل</button>
           <button class="filter-tab" onclick="filterOrders('Placed',this)">🔴 جديد</button>
+          <button class="filter-tab" onclick="filterOrders('Pending',this)">🟠 معلق</button>
           <button class="filter-tab" onclick="filterOrders('Preparing',this)">🟡 تحضير</button>
           <button class="filter-tab" onclick="filterOrders('Ready',this)">🟢 جاهز</button>
           <button class="filter-tab" onclick="filterOrders('Delivered',this)">🔵 مكتمل</button>
@@ -680,11 +681,10 @@ body { background: #f0f2f5; min-height: 100vh; }
 // ════════════════════════════════════════════════════
 //  CONFIG
 // ════════════════════════════════════════════════════
-const API = 'https://rohan-exceptive-antonio.ngrok-free.dev/api';
+const API = 'https://restaurant-production-9092.up.railway.app/api';
 
 function apiFetch(url, options = {}) {
   options.headers = options.headers || {};
-  options.headers['ngrok-skip-browser-warning'] = 'true';
   if (options.body && !options.headers['Content-Type']) {
     options.headers['Content-Type'] = 'application/json';
   }
@@ -987,7 +987,8 @@ function getOrderBtns(o) {
   if(['Placed','Pending'].includes(o.status)) b+=`<button class="btn-action btn-prepare" onclick="updateOrder(${o.orderId},'Preparing')">🔥 تحضير</button>`;
   if(o.status==='Preparing') b+=`<button class="btn-action btn-ready" onclick="updateOrder(${o.orderId},'Ready')">✅ جاهز</button>`;
   if(o.status==='Ready') b+=`<button class="btn-action btn-deliver" onclick="updateOrder(${o.orderId},'Delivered')">🚀 تسليم</button>`;
-  if(['Placed','Pending','Preparing'].includes(o.status)) b+=`<button class="btn-action btn-delete" onclick="updateOrder(${o.orderId},'Cancelled')">✕</button>`;
+  if(['Placed','Pending','Preparing'].includes(o.status)) b+=`<button class="btn-action btn-delete" onclick="updateOrder(${o.orderId},'Cancelled')" title="إلغاء الطلب">✕ إلغاء</button>`;
+  b+=`<button class="btn-action" style="background:#f5f5f5;color:#7f8c8d" onclick="deleteOrder(${o.orderId})" title="حذف نهائي">🗑️</button>`;
   return b;
 }
 
@@ -999,6 +1000,18 @@ async function updateOrder(id, status) {
       if(o){o.status=status; updateOrderStats(); renderOrders(); renderOverviewOrders();}
       showToast(`✅ الطلب #${id} → ${STATUS_AR[status]||status}`,'success');
     } else showToast('❗ فشل تحديث الطلب','error');
+  } catch(e) { showToast('❗ خطأ في الاتصال','error'); }
+}
+
+async function deleteOrder(id) {
+  if(!confirm(`هل تريد حذف الطلب #${id} نهائياً؟ لا يمكن التراجع!`)) return;
+  try {
+    const res = await apiFetch(`${API}/Orders/${id}`, {method:'DELETE'});
+    if(res.ok) {
+      allOrders = allOrders.filter(o => o.orderId != id);
+      updateOrderStats(); renderOrders(); renderOverviewOrders();
+      showToast(`✅ تم حذف الطلب #${id} نهائياً`,'success');
+    } else showToast('❗ فشل الحذف','error');
   } catch(e) { showToast('❗ خطأ في الاتصال','error'); }
 }
 
