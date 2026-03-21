@@ -261,7 +261,6 @@ body { background: #0f0f13; color: #eee; min-height: 100vh; }
         <div class="field"><label>العنوان</label><input type="text" id="a-address" placeholder="العنوان (اختياري)"></div>
       </div>
       <div class="form-row three">
-        <div class="field"><label>العنوان</label><input type="text" id="a-addr" placeholder="عمان - الأردن"></div>
         <div class="field"><label>وقت الفتح</label><input type="time" id="a-open" value="10:00"></div>
         <div class="field"><label>وقت الإغلاق</label><input type="time" id="a-close" value="23:00"></div>
       </div>
@@ -365,20 +364,23 @@ if (saved) {
     if (s.loggedIn) {
       currentAdminUser = s.username || 'admin';
       window.addEventListener('load', () => {
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('main-app').style.display = 'block';
-        document.getElementById('sa-username-display').textContent = currentAdminUser;
+        const ls = document.getElementById('login-screen');
+        const ma = document.getElementById('main-app');
+        const ud = document.getElementById('sa-username-display');
+        if(ls) ls.style.display = 'none';
+        if(ma) ma.style.display = 'block';
+        if(ud) ud.textContent = currentAdminUser;
         loadAll();
       });
     }
-  } catch(e) {}
+  } catch(e) { sessionStorage.removeItem('rms_superadmin'); }
 }
 
 async function doLogin() {
-  const user = document.getElementById('l-user').value.trim();
-  const pass = document.getElementById('l-pass').value.trim();
+  const user = document.getElementById('l-user')?.value.trim() || '';
+  const pass = document.getElementById('l-pass')?.value.trim() || '';
   const errEl = document.getElementById('login-error');
-  errEl.style.display = 'none';
+  if(errEl) errEl.style.display = 'none';
   if (!user || !pass) { errEl.style.display='block'; errEl.textContent='❗ أدخل البيانات'; return; }
   const btn = document.getElementById('login-btn');
   btn.textContent = '⏳...'; btn.disabled = true;
@@ -463,7 +465,7 @@ async function loadRestaurants() {
     const si = document.getElementById('s-inactive');if(si) si.textContent = inactive;
 
     const tbody = document.getElementById('restaurants-tbody');
-    if (!tbody) return;
+    if (!tbody) { console.warn('restaurants-tbody not found'); return; }
     tbody.innerHTML = restaurants.map(r => `<tr>
       <td><strong style="color:#6c63ff">#${r.RestaurantId}</strong></td>
       <td><strong style="color:white">${r.name}</strong></td>
@@ -560,7 +562,7 @@ async function addRestaurant() {
       })
     });
     const data = await res.json();
-    if (res.ok || data.restaurantId || data.RestaurantId) {
+    if (res.ok && (data.restaurantId || data.RestaurantId || data.success)) {
       toast(`✅ تم إضافة ${name} بنجاح!`,'s');
       document.getElementById('add-form')?.classList.remove('show');
       await loadRestaurants();

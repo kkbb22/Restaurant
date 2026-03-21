@@ -747,7 +747,16 @@ function playNewOrder() {
   const rid = p.get('RestaurantId') || p.get('restaurantId');
   const rname = decodeURIComponent(p.get('name') || '');
   if (rid && parseInt(rid) > 0) {
-    currentRestaurantId = parseInt(rid);
+    // Always use URL params - clear old session if different restaurant
+    const newId = parseInt(rid);
+    const savedSession = sessionStorage.getItem('rms_session');
+    if (savedSession) {
+      try {
+        const ss = JSON.parse(savedSession);
+        if (ss.restaurantId !== newId) sessionStorage.removeItem('rms_session');
+      } catch(e) {}
+    }
+    currentRestaurantId = newId;
     currentRestaurantName = rname || 'مطعم';
     sessionStorage.setItem('rms_session', JSON.stringify({
       restaurantId: currentRestaurantId, name: currentRestaurantName, username: ''
