@@ -258,6 +258,7 @@ body { background: #0f0f13; color: #eee; min-height: 100vh; }
       <div class="form-row">
         <div class="field"><label>اسم المستخدم *</label><input type="text" id="a-user" placeholder="alameer"></div>
         <div class="field"><label>كلمة المرور *</label><input type="text" id="a-pass" placeholder="123456"></div>
+        <div class="field"><label>العنوان</label><input type="text" id="a-address" placeholder="العنوان (اختياري)"></div>
       </div>
       <div class="form-row three">
         <div class="field"><label>العنوان</label><input type="text" id="a-addr" placeholder="عمان - الأردن"></div>
@@ -534,7 +535,7 @@ async function addRestaurant() {
   const user  = document.getElementById('a-user').value.trim();
   const pass  = document.getElementById('a-pass').value.trim();
   const phone = document.getElementById('a-phone').value.trim();
-  const addr  = document.getElementById('a-address').value.trim();
+  const addr  = document.getElementById('a-address')?.value.trim() || '';
   const c1    = document.getElementById('a-color1').value;
   const c2    = document.getElementById('a-color2').value;
   const open  = document.getElementById('a-open').value;

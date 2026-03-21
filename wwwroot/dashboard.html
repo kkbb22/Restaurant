@@ -909,20 +909,22 @@ async function loadOrders() {
     rawCustomers.forEach(c => { custMap[c.customerId||c.CustomerId] = c; });
 
     allOrders = rawOrders.map(o => {
-      const orderId     = o.orderId     || o.OrderId     || o.id   || '?';
-      const customerId  = o.customerId  || o.CustomerId;
-      const status      = o.status      || o.Status      || 'Placed';
-      const totalAmount = parseFloat(o.totalAmount||o.TotalAmount||0);
-      const orderDate   = o.orderDate   || o.OrderDate   || o.createdAt || o.CreatedAt || null;
+      // API returns: OrderId, CustomerId, RestaurantId, OrderDate, Status, TotalAmount, CustomerName, CustomerPhone, Items
+      const orderId     = o.OrderId     || o.orderId     || o.id   || '?';
+      const customerId  = o.CustomerId  || o.customerId;
+      const restaurantId= o.RestaurantId|| o.restaurantId|| 0;
+      const status      = o.Status      || o.status      || 'Placed';
+      const totalAmount = parseFloat(o.TotalAmount||o.totalAmount||0);
+      const orderDate   = o.OrderDate   || o.orderDate   || o.createdAt || o.CreatedAt || null;
       const cust        = custMap[customerId] || {};
-      const customerName  = o.customerName  || o.CustomerName  || cust.fullName  || cust.FullName  || 'غير معروف';
-      const customerPhone = o.customerPhone || o.CustomerPhone || cust.phoneNumber || '';
-      const items = (o.items||o.orderItems||o.OrderItems||[]).map(i=>({
-        name:      i.menuName||i.MenuName||i.menuItem?.name||i.name||'صنف',
-        quantity:  i.quantity ||i.Quantity ||1,
-        unitPrice: i.unitPrice||i.UnitPrice||i.price||0,
+      const customerName  = o.CustomerName  || o.customerName  || cust.fullName  || cust.FullName  || 'غير معروف';
+      const customerPhone = o.CustomerPhone || o.customerPhone || cust.phoneNumber || '';
+      const items = (o.Items||o.items||o.orderItems||o.OrderItems||[]).map(i=>({
+        name:      i.MenuName||i.menuName||i.menuItem?.name||i.name||'صنف',
+        quantity:  i.Quantity ||i.quantity ||1,
+        unitPrice: i.UnitPrice||i.unitPrice||i.Price||i.price||0,
       }));
-      return {orderId,customerId,status,totalAmount,orderDate,customerName,customerPhone,items};
+      return {orderId,customerId,restaurantId,status,totalAmount,orderDate,customerName,customerPhone,items};
     });
 
     const newCount = allOrders.filter(o=>o.status==='Placed'||o.status==='Pending').length;
@@ -1365,7 +1367,13 @@ function showToast(msg,type='') {
 // ════════════════════════════════════════════════════
 //  AUTO REFRESH — كل 15 ثانية
 // ════════════════════════════════════════════════════
-setInterval(()=>{ if(currentRestaurantId>0) loadOrders(); },10000); // كل 10 ثواني
+// تحديث الطلبات كل 8 ثواني تلقائياً
+setInterval(async ()=>{ 
+  if(currentRestaurantId>0) {
+    await loadOrders();
+    // إشعار صوتي إذا في طلب جديد
+  }
+},8000);
 setInterval(()=>{ if(currentRestaurantId>0) checkStatus(); },30000);
 </script>
 </body>
