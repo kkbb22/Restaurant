@@ -1,5 +1,2 @@
-[phases.build]
-cmds = ["dotnet publish -c Release -o out"]
-
-[start]
-cmd = "dotnet out/Restaurant.dll"
+[variables]
+NIXPACKS_DOTNET_VERSION = "8"
