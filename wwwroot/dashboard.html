@@ -826,11 +826,16 @@ async function doLogin() {
 }
 
 function showDashboard() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('main-dashboard').style.display = 'block';
-  document.getElementById('sidebar-restaurant-name').textContent = currentRestaurantName;
-  document.getElementById('sidebar-brand-name').innerHTML =
-    `<i class="fas fa-utensils ms-2"></i> ${currentRestaurantName||'مطعمي'}`;
+  const loginScreen = document.getElementById('login-screen');
+  const mainDash    = document.getElementById('main-dashboard');
+  const sidebarName = document.getElementById('sidebar-restaurant-name');
+  const brandName   = document.getElementById('sidebar-brand-name');
+  const lastUpdate  = document.getElementById('last-update-time');
+
+  if (loginScreen) loginScreen.style.display = 'none';
+  if (mainDash)    mainDash.style.display    = 'block';
+  if (sidebarName) sidebarName.textContent   = currentRestaurantName;
+  if (brandName)   brandName.innerHTML = `<i class="fas fa-utensils ms-2"></i> ${currentRestaurantName||'مطعمي'}`;
   document.title = 'لوحة تحكم — ' + currentRestaurantName;
   refreshAll();
 }
@@ -885,8 +890,8 @@ function showPage(name, el) {
 async function refreshAll() {
   if (!currentRestaurantId) return;
   await Promise.allSettled([loadOrders(), loadCustomers(), checkStatus()]);
-  document.getElementById('last-update-time').textContent =
-    new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const el = document.getElementById('last-update-time');
+  if (el) el.textContent = new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
 // ════════════════════════════════════════════════════
@@ -1360,7 +1365,7 @@ function showToast(msg,type='') {
 // ════════════════════════════════════════════════════
 //  AUTO REFRESH — كل 15 ثانية
 // ════════════════════════════════════════════════════
-setInterval(()=>{ if(currentRestaurantId>0) refreshAll(); },15000);
+setInterval(()=>{ if(currentRestaurantId>0) loadOrders(); },10000); // كل 10 ثواني
 setInterval(()=>{ if(currentRestaurantId>0) checkStatus(); },30000);
 </script>
 </body>
