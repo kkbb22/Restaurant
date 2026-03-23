@@ -22,8 +22,7 @@ builder.Services.AddCors(options =>
         policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 });
 
-// 3. ≈⁄œ«œ ﬁ«⁄œ… «·»Ì«‰«  (—»ÿ „»«‘— ⁄‘«‰ ‰Œ·’ „‰ «·‹ 500)
-// Â«œ «·—«»ÿ „‰ »Ì«‰«  «·‹ Postgres  »⁄ ﬂ ›Ì Railway
+// 3. «·—»ÿ «·„»«‘— Ê«·‰Â«∆Ì »ﬁ«⁄œ… «·»Ì«‰« 
 var pgConn = "Host=viaduct.proxy.rlwy.net;Port=25152;Database=railway;Username=postgres;Password=mndXisvYFvTfXmPNojYwNqOfVfGNoTte;SSL Mode=Require;Trust Server Certificate=true";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -34,15 +33,17 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var app = builder.Build();
 
-// 4. »‰«¡ «·Ãœ«Ê· ›Ê—«
+// 4.  ÿ»Ìﬁ «·‹ Migrations Ê»‰«¡ «·Ãœ«Ê· €’» ⁄‰ «·”Ì—›—
 using (var scope = app.Services.CreateScope())
 {
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var services = scope.ServiceProvider;
     try {
-        context.Database.EnsureCreated(); 
-        Console.WriteLine("?? Database Ready!");
+        var context = services.GetRequiredService<AppDbContext>();
+        // Â«œ «·”ÿ— ÂÊ «··Ì —Õ Ì»‰Ì «·Ãœ«Ê· ’Õ »«· — Ì»
+        context.Database.Migrate(); 
+        Console.WriteLine("?? Database Migrated & Ready!");
     } catch (Exception ex) {
-        Console.WriteLine($"? Error: {ex.Message}");
+        Console.WriteLine($"? Migration Error: {ex.Message}");
     }
 }
 
