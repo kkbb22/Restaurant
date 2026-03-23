@@ -66,4 +66,4 @@ app.UseCors("AllowAll");
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapControllers();
-app.Run();
+app.Run(); 
