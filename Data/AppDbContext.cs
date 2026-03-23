@@ -7,11 +7,12 @@ namespace Restaurant.Data
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
         {
+            // هاد السطر بيحل مشكلة التوقيت (DateTime) في PostgreSQL فوراً
+            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
         }
 
-        // التعديل هنا: استخدام الاسم الجديد RestaurantProfile
+        // جداول قاعدة البيانات
         public DbSet<RestaurantProfile> Restaurants { get; set; }
-        
         public DbSet<Customer> Customers { get; set; }
         public DbSet<RestaurantTable> RestaurantTables { get; set; }
         public DbSet<MenuItem> MenuItems { get; set; }
@@ -26,20 +27,24 @@ namespace Restaurant.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            // إعدادات الجداول والأسماء
             modelBuilder.Entity<RestaurantTable>().ToTable("RestaurantTables");
 
+            // علاقة الحجوزات مع الزبائن
             modelBuilder.Entity<Reservation>()
                 .HasOne(r => r.Customer)
                 .WithMany()
                 .HasForeignKey(r => r.CustomerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // علاقة الطلبات مع الزبائن
             modelBuilder.Entity<Order>()
                 .HasOne(o => o.Customer)
                 .WithMany()
                 .HasForeignKey(o => o.CustomerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // ضبط دقة الأرقام العشرية (Decimal) عشان ما تضرب في الـ Database
             modelBuilder.Entity<MenuItem>()
                 .Property(m => m.Price)
                 .HasColumnType("decimal(18,2)");
