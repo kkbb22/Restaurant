@@ -5,7 +5,7 @@
 namespace Restaurant.Migrations
 {
     /// <inheritdoc />
-    public partial class PostgresMigration : Migration
+    public partial class NewPostgresMigration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

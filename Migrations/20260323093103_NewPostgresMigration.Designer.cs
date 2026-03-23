@@ -12,8 +12,8 @@ using Restaurant.Data;
 namespace Restaurant.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260321172209_PostgresMigration")]
-    partial class PostgresMigration
+    [Migration("20260323093103_NewPostgresMigration")]
+    partial class NewPostgresMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
