@@ -22,39 +22,25 @@ builder.Services.AddCors(options =>
         policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 });
 
-// 3. ≈⁄œ«œ ﬁ«⁄œ… «·»Ì«‰«  («· Ê«›ﬁ «· «„ „⁄ PostgreSQL)
-var dbUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+// 3. ≈⁄œ«œ ﬁ«⁄œ… «·»Ì«‰«  (—»ÿ „»«‘— ⁄‘«‰ ‰Œ·’ „‰ «·‹ 500)
+// Â«œ «·—«»ÿ „‰ »Ì«‰«  «·‹ Postgres  »⁄ ﬂ ›Ì Railway
+var pgConn = "Host=viaduct.proxy.rlwy.net;Port=25152;Database=railway;Username=postgres;Password=mndXisvYFvTfXmPNojYwNqOfVfGNoTte;SSL Mode=Require;Trust Server Certificate=true";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    if (!string.IsNullOrEmpty(dbUrl))
-    {
-        var uri = new Uri(dbUrl);
-        var userInfo = uri.UserInfo.Split(':');
-        var pgConn = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
-        options.UseNpgsql(pgConn);
-    }
-    else
-    {
-        // «” Œœ„ SQL Server ›ﬁÿ ··„Õ·Ì ≈–« ﬂ‰   ›÷· –·ﬂ° 
-        // ·ﬂ‰ «·√›÷·  ÊÕÌœÂ« ·‹ PostgreSQL · Ã‰» „‘«ﬂ· «·‹ nvarchar
-        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
-    }
-});
+    options.UseNpgsql(pgConn));
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var app = builder.Build();
 
-// 4. »‰«¡ «·Ãœ«Ê· ›Ê—« (Õ· „‘ﬂ·… Relation does not exist)
+// 4. »‰«¡ «·Ãœ«Ê· ›Ê—«
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     try {
-        // EnsureCreated ÂÌ «·Õ· «·√”—⁄ ·»Ì∆… Railway ·√‰Â«   Ã«Â·  Ê«›ﬁ «·‹ Migrations «·ﬁœÌ„… Ê »‰Ì «·Ãœ«Ê· ›Ê—«
         context.Database.EnsureCreated(); 
-        Console.WriteLine("? Database Ready!");
+        Console.WriteLine("?? Database Ready!");
     } catch (Exception ex) {
         Console.WriteLine($"? Error: {ex.Message}");
     }
@@ -66,4 +52,4 @@ app.UseCors("AllowAll");
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapControllers();
-app.Run(); 
+app.Run();
